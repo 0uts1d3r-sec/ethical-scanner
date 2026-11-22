@@ -23,8 +23,8 @@ A desktop web vulnerability scanner with a dark GUI, built with Python and Tkint
 Requires **Python 3.8+** and Tkinter.
 
 ```bash
-git clone https://github.com/<your-user>/<your-repo>.git
-cd <your-repo>
+git clone https://github.com/0uts1d3r-sec/ethical-scanner.git
+cd ethical-scanner
 
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
