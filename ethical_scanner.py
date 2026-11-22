@@ -1,7 +1,7 @@
 """
-        WEB VULNERABILITY SCANNER
-        Wordlist loading (SQLi + XSS from .txt files)
-        For authorized security testing only!
+WEB VULNERABILITY SCANNER
+Wordlist loading (SQLi + XSS from .txt files)
+For authorized security testing only!
 """
 
 import requests
@@ -14,9 +14,15 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
 import webbrowser
+
+try:                                    # Tk is optional: the CLI works without it
+    import tkinter as tk
+    from tkinter import ttk, scrolledtext, messagebox, filedialog
+    GUI_AVAILABLE = True
+except ImportError:
+    tk = None
+    GUI_AVAILABLE = False
 
 try:
     from bs4 import BeautifulSoup
@@ -29,14 +35,22 @@ try:
     from reportlab.lib import colors
     from reportlab.lib.units import cm
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
-                                     Paragraph, Spacer, HRFlowable)
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Table,
+        TableStyle,
+        Paragraph,
+        Spacer,
+        HRFlowable,
+    )
     from reportlab.lib.enums import TA_CENTER
+
     PDF_AVAILABLE = True
 except ImportError:
     PDF_AVAILABLE = False
 
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Folder shipped with the project that contains the sample wordlists
@@ -46,23 +60,22 @@ SAMPLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wordlist
 #  THEME
 #  One soft accent (sky blue) on black, with slate-blue panels. Header and borders are
 #  the accent mixed into black; text is a cool off-white, never pure white.
+ACCENT = "#F8FBFF"  # titles, primary button, highlights
+PRIMARY = "#1A1B1E"  # header band, table headers, secondary buttons
+TEXT = "#F8FBFF"  # main text
+TEXT_DIM = "#9AA0A8"  # secondary text
+INK = "#0A0A0B"  # status bar, text on the accent button
 
-ACCENT   = "#F8FBFF"   # titles, primary button, highlights
-PRIMARY  = "#1A1B1E"   # header band, table headers, secondary buttons
-TEXT     = "#F8FBFF"   # main text
-TEXT_DIM = "#9AA0A8"   # secondary text
-INK      = "#0A0A0B"   # status bar, text on the accent button
-
-BG         = "#0A0A0B"   # app background
-SURFACE    = "#131416"   # log, tables, previews (mid-tone: needs dark text)
-SURFACE_HI = "#1C1E22"   # inputs, cards
-BORDER     = "#2E3036"   # separators, outlines
-MUTED      = "#5F646B"   # disabled controls only
+BG = "#0A0A0B"  # app background
+SURFACE = "#131416"  # log, tables, previews (mid-tone: needs dark text)
+SURFACE_HI = "#1C1E22"  # inputs, cards
+BORDER = "#2E3036"  # separators, outlines
+MUTED = "#5F646B"  # disabled controls only
 
 # Text drawn ON the mid-tone SURFACE (light text would be unreadable there)
-ON_SURFACE     = "#D5DAE0"   # main text
-ON_SURFACE_DIM = "#8E949C"   # secondary text
-ON_SURFACE_HI  = "#F8FBFF"   # emphasis (findings, titles)
+ON_SURFACE = "#D5DAE0"  # main text
+ON_SURFACE_DIM = "#8E949C"  # secondary text
+ON_SURFACE_HI = "#F8FBFF"  # emphasis (findings, titles)
 
 
 #  DEFAULT PAYLOADS (used when no wordlist is loaded)
@@ -70,7 +83,7 @@ DEFAULT_SQL_PAYLOADS = [
     "'",
     "' OR '1'='1",
     "' OR '1'='1' --",
-    "\" OR \"1\"=\"1",
+    '" OR "1"="1',
     "' UNION SELECT NULL--",
     "' OR 1=1--",
     "admin'--",
@@ -105,14 +118,26 @@ SQL_ERROR_SIGNATURES = [
 ]
 
 SENSITIVE_PATHS = [
-    "/admin", "/admin/login", "/wp-admin", "/phpmyadmin",
-    "/.env", "/.git", "/backup", "/config",
-    "/api/users", "/robots.txt", "/.htaccess", "/wp-config.php",
+    "/admin",
+    "/admin/login",
+    "/wp-admin",
+    "/phpmyadmin",
+    "/.env",
+    "/.git",
+    "/backup",
+    "/config",
+    "/api/users",
+    "/robots.txt",
+    "/.htaccess",
+    "/wp-config.php",
 ]
 
 SECURITY_HEADERS = [
-    "Strict-Transport-Security", "X-Content-Type-Options",
-    "X-Frame-Options", "Content-Security-Policy", "X-XSS-Protection",
+    "Strict-Transport-Security",
+    "X-Content-Type-Options",
+    "X-Frame-Options",
+    "Content-Security-Policy",
+    "X-XSS-Protection",
 ]
 
 
@@ -214,39 +239,68 @@ class WordlistManager:
 CMS_SIGNATURES = {
     "WordPress": {
         "paths": ["/wp-login.php", "/wp-admin/", "/wp-content/"],
-        "headers": [], "cookies": ["wordpress_", "wp-settings-"],
-        "html_patterns": [r'<meta name="generator" content="WordPress', r'/wp-content/themes/', r'wp-emoji'],
-        "known_vulns": ["Check for vulnerable plugins via WPScan", "Keep WordPress up to date",
-                          "Protect wp-login.php with 2FA", "Disable user enumeration (?author=1)"],
+        "headers": [],
+        "cookies": ["wordpress_", "wp-settings-"],
+        "html_patterns": [
+            r'<meta name="generator" content="WordPress',
+            r"/wp-content/themes/",
+            r"wp-emoji",
+        ],
+        "known_vulns": [
+            "Check for vulnerable plugins via WPScan",
+            "Keep WordPress up to date",
+            "Protect wp-login.php with 2FA",
+            "Disable user enumeration (?author=1)",
+        ],
         "icon": "[WP]",
     },
     "Joomla": {
         "paths": ["/administrator/", "/components/"],
-        "headers": [], "cookies": ["joomla_"],
-        "html_patterns": [r'<meta name="generator" content="Joomla', r'/media/jui/', r'option=com_'],
-        "known_vulns": ["Keep Joomla up to date", "Check third-party extensions", "Protect /administrator/ by IP"],
+        "headers": [],
+        "cookies": ["joomla_"],
+        "html_patterns": [
+            r'<meta name="generator" content="Joomla',
+            r"/media/jui/",
+            r"option=com_",
+        ],
+        "known_vulns": [
+            "Keep Joomla up to date",
+            "Check third-party extensions",
+            "Protect /administrator/ by IP",
+        ],
         "icon": "[JM]",
     },
     "Drupal": {
         "paths": ["/user/login", "/core/", "/sites/default/"],
-        "headers": ["X-Generator: Drupal"], "cookies": ["SESS"],
-        "html_patterns": [r'<meta name="Generator" content="Drupal', r'Drupal\.settings'],
+        "headers": ["X-Generator: Drupal"],
+        "cookies": ["SESS"],
+        "html_patterns": [
+            r'<meta name="Generator" content="Drupal',
+            r"Drupal\.settings",
+        ],
         "known_vulns": ["Keep Drupal up to date", "Check /sites/default/settings.php"],
         "icon": "[DR]",
     },
     "Magento": {
         "paths": ["/admin/", "/skin/frontend/"],
-        "headers": [], "cookies": ["frontend"],
-        "html_patterns": [r'Mage\.Cookies', r'/skin/frontend/'],
-        "known_vulns": ["Magento is a frequent skimming target", "Upgrade to Magento 2.x"],
+        "headers": [],
+        "cookies": ["frontend"],
+        "html_patterns": [r"Mage\.Cookies", r"/skin/frontend/"],
+        "known_vulns": [
+            "Magento is a frequent skimming target",
+            "Upgrade to Magento 2.x",
+        ],
         "icon": "[MG]",
     },
     "Laravel": {
         "paths": ["/public/", "/_ignition/"],
-        "headers": [], "cookies": ["laravel_session", "XSRF-TOKEN"],
-        "html_patterns": [r'csrf-token'],
-        "known_vulns": ["Never leave APP_DEBUG=true in production",
-                          "Check that .env is not publicly accessible"],
+        "headers": [],
+        "cookies": ["laravel_session", "XSRF-TOKEN"],
+        "html_patterns": [r"csrf-token"],
+        "known_vulns": [
+            "Never leave APP_DEBUG=true in production",
+            "Check that .env is not publicly accessible",
+        ],
         "icon": "[LV]",
     },
 }
@@ -258,7 +312,9 @@ def short_error(e):
     msg = str(e)
     low = msg.lower()
     if "ssl" in low or "handshake" in low or "certificate" in low:
-        return "TLS/SSL connection failed (the server may not support HTTPS: try http://)"
+        return (
+            "TLS/SSL connection failed (the server may not support HTTPS: try http://)"
+        )
     if "timed out" in low or "timeout" in low:
         return "Connection timed out"
     if "max retries" in low or "connection" in low or "name or service" in low:
@@ -272,8 +328,16 @@ class ScanEngine(threading.Thread):
     Now receives custom payloads from the WordlistManager.
     """
 
-    def __init__(self, url, sql_payloads, xss_payloads,
-                 log_callback, vuln_callback, cms_callback, done_callback):
+    def __init__(
+        self,
+        url,
+        sql_payloads,
+        xss_payloads,
+        log_callback,
+        vuln_callback,
+        cms_callback,
+        done_callback,
+    ):
         super().__init__(daemon=True)
         if not url.startswith("http"):
             url = "https://" + url
@@ -291,15 +355,24 @@ class ScanEngine(threading.Thread):
         self.session.headers.update({"User-Agent": "EthicalScanner"})
 
     def record_vuln(self, vuln_type, severity, description, detail=""):
-        vuln = {"type": vuln_type, "severity": severity,
-                "description": description, "detail": detail}
+        vuln = {
+            "type": vuln_type,
+            "severity": severity,
+            "description": description,
+            "detail": detail,
+        }
         self.results.append(vuln)
         self.add_vuln(vuln)
 
     def test_https(self):
         self.log("Checking HTTPS...", "info")
         if not self.url.startswith("https://"):
-            self.record_vuln("Missing HTTPS", "High", "Site is not encrypted.", "Install Let's Encrypt.")
+            self.record_vuln(
+                "Missing HTTPS",
+                "High",
+                "Site is not encrypted.",
+                "Install Let's Encrypt.",
+            )
             self.log("  [!] HTTPS missing", "vuln")
         else:
             self.log("  [OK] URL uses HTTPS", "ok")
@@ -310,7 +383,12 @@ class ScanEngine(threading.Thread):
             r = self.session.get(self.url, timeout=10, verify=False)
             for h in SECURITY_HEADERS:
                 if h not in r.headers:
-                    self.record_vuln(f"Header: {h}", "Low", f"'{h}' is missing.", "Configure the server.")
+                    self.record_vuln(
+                        f"Header: {h}",
+                        "Low",
+                        f"'{h}' is missing.",
+                        "Configure the server.",
+                    )
                     self.log(f"  [!] Missing: {h}", "warn")
                 else:
                     self.log(f"  [OK] {h}", "ok")
@@ -323,18 +401,29 @@ class ScanEngine(threading.Thread):
             try:
                 r = self.session.get(urljoin(self.url, path), timeout=5, verify=False)
                 if r.status_code == 200:
-                    self.record_vuln("Exposed path", "High",
-                        f"'{path}' is accessible.", f"URL: {urljoin(self.url, path)}")
+                    self.record_vuln(
+                        "Exposed path",
+                        "High",
+                        f"'{path}' is accessible.",
+                        f"URL: {urljoin(self.url, path)}",
+                    )
                     self.log(f"  [HIT] {path} (200)", "vuln")
                 elif r.status_code == 403:
-                    self.record_vuln("Protected path", "Medium",
-                        f"'{path}' exists.", f"URL: {urljoin(self.url, path)}")
+                    self.record_vuln(
+                        "Protected path",
+                        "Medium",
+                        f"'{path}' exists.",
+                        f"URL: {urljoin(self.url, path)}",
+                    )
                     self.log(f"  [!] {path} (403)", "warn")
             except Exception:
                 pass
 
     def test_forms(self):
-        self.log(f"Scanning HTML forms ({len(self.sql_payloads)} SQLi payloads, {len(self.xss_payloads)} XSS)...", "info")
+        self.log(
+            f"Scanning HTML forms ({len(self.sql_payloads)} SQLi payloads, {len(self.xss_payloads)} XSS)...",
+            "info",
+        )
         try:
             r = self.session.get(self.url, timeout=10, verify=False)
             soup = BeautifulSoup(r.text, "html.parser")
@@ -342,10 +431,12 @@ class ScanEngine(threading.Thread):
             for form in soup.find_all("form"):
                 action = urljoin(self.url, form.get("action", ""))
                 method = form.get("method", "get").lower()
-                fields = {inp.get("name"): inp.get("value", "test")
-                          for inp in form.find_all(["input", "textarea"])
-                          if inp.get("name") and inp.get("type", "text")
-                          not in ["submit", "button"]}
+                fields = {
+                    inp.get("name"): inp.get("value", "test")
+                    for inp in form.find_all(["input", "textarea"])
+                    if inp.get("name")
+                    and inp.get("type", "text") not in ["submit", "button"]
+                }
                 if fields:
                     forms.append({"action": action, "method": method, "fields": fields})
 
@@ -356,7 +447,10 @@ class ScanEngine(threading.Thread):
             self.log(f"  {len(forms)} form(s) found", "ok")
 
             for i, form in enumerate(forms):
-                self.log(f"  -> Form {i+1}: {form['method'].upper()} {form['action']}", "scan")
+                self.log(
+                    f"  -> Form {i + 1}: {form['method'].upper()} {form['action']}",
+                    "scan",
+                )
 
                 # -- Test SQLi with the custom wordlist --
                 sql_vuln_found = False
@@ -366,14 +460,28 @@ class ScanEngine(threading.Thread):
                     for field in form["fields"]:
                         data = {**form["fields"], field: payload}
                         try:
-                            resp = (self.session.post(form["action"], data=data, timeout=6, verify=False)
-                                    if form["method"] == "post"
-                                    else self.session.get(form["action"], params=data, timeout=6, verify=False))
-                            if any(e in resp.text.lower() for e in SQL_ERROR_SIGNATURES):
-                                self.record_vuln("SQLi (Form)", "Critical",
+                            resp = (
+                                self.session.post(
+                                    form["action"], data=data, timeout=6, verify=False
+                                )
+                                if form["method"] == "post"
+                                else self.session.get(
+                                    form["action"], params=data, timeout=6, verify=False
+                                )
+                            )
+                            if any(
+                                e in resp.text.lower() for e in SQL_ERROR_SIGNATURES
+                            ):
+                                self.record_vuln(
+                                    "SQLi (Form)",
+                                    "Critical",
                                     f"Field '{field}' is vulnerable to SQL injection.",
-                                    f"Payload #{j+1}: {payload[:80]}")
-                                self.log(f"  [HIT] SQLi: field '{field}' | payload #{j+1}", "vuln")
+                                    f"Payload #{j + 1}: {payload[:80]}",
+                                )
+                                self.log(
+                                    f"  [HIT] SQLi: field '{field}' | payload #{j + 1}",
+                                    "vuln",
+                                )
                                 sql_vuln_found = True
                                 break
                         except Exception:
@@ -387,14 +495,26 @@ class ScanEngine(threading.Thread):
                     for field in form["fields"]:
                         data = {**form["fields"], field: payload}
                         try:
-                            resp = (self.session.post(form["action"], data=data, timeout=6, verify=False)
-                                    if form["method"] == "post"
-                                    else self.session.get(form["action"], params=data, timeout=6, verify=False))
+                            resp = (
+                                self.session.post(
+                                    form["action"], data=data, timeout=6, verify=False
+                                )
+                                if form["method"] == "post"
+                                else self.session.get(
+                                    form["action"], params=data, timeout=6, verify=False
+                                )
+                            )
                             if payload in resp.text:
-                                self.record_vuln("Reflected XSS (Form)", "High",
+                                self.record_vuln(
+                                    "Reflected XSS (Form)",
+                                    "High",
                                     f"Field '{field}' reflects unfiltered code.",
-                                    f"Payload #{j+1}: {payload[:80]}")
-                                self.log(f"  [HIT] XSS: field '{field}' | payload #{j+1}", "vuln")
+                                    f"Payload #{j + 1}: {payload[:80]}",
+                                )
+                                self.log(
+                                    f"  [HIT] XSS: field '{field}' | payload #{j + 1}",
+                                    "vuln",
+                                )
                                 xss_vuln_found = True
                                 break
                         except Exception:
@@ -419,34 +539,53 @@ class ScanEngine(threading.Thread):
             evidence = []
             for path in sig["paths"]:
                 try:
-                    r = self.session.get(urljoin(self.url, path), timeout=5, verify=False)
+                    r = self.session.get(
+                        urljoin(self.url, path), timeout=5, verify=False
+                    )
                     if r.status_code in [200, 301, 302, 403]:
-                        score += 1; evidence.append(f"Path: {path} ({r.status_code})"); break
+                        score += 1
+                        evidence.append(f"Path: {path} ({r.status_code})")
+                        break
                 except Exception:
                     pass
             for h in sig["headers"]:
                 if h.split(":")[0] in response_headers:
-                    score += 1; evidence.append(f"Header: {h}")
+                    score += 1
+                    evidence.append(f"Header: {h}")
             for c in sig["cookies"]:
                 for cn in response_cookies:
                     if c.lower() in cn.lower():
-                        score += 1; evidence.append(f"Cookie: {cn}"); break
+                        score += 1
+                        evidence.append(f"Cookie: {cn}")
+                        break
             for p in sig["html_patterns"]:
                 if re.search(p, html_content, re.IGNORECASE):
-                    score += 1; evidence.append(f"HTML: {p[:40]}"); break
+                    score += 1
+                    evidence.append(f"HTML: {p[:40]}")
+                    break
 
             if score > 0:
-                self.detected_cms.append({
-                    "name": cms_name, "score": score,
-                    "confidence": min(100, score * 25),
-                    "evidence": evidence,
-                    "known_vulns": sig["known_vulns"],
-                    "icon": sig["icon"],
-                })
-                self.log(f"  {sig['icon']} {cms_name} detected! ({min(100,score*25)}%)", "vuln")
+                self.detected_cms.append(
+                    {
+                        "name": cms_name,
+                        "score": score,
+                        "confidence": min(100, score * 25),
+                        "evidence": evidence,
+                        "known_vulns": sig["known_vulns"],
+                        "icon": sig["icon"],
+                    }
+                )
+                self.log(
+                    f"  {sig['icon']} {cms_name} detected! ({min(100, score * 25)}%)",
+                    "vuln",
+                )
                 for rec in sig["known_vulns"]:
-                    self.record_vuln(f"[{cms_name}] Recommendation", "Medium",
-                        f"CMS {cms_name} detected.", rec)
+                    self.record_vuln(
+                        f"[{cms_name}] Recommendation",
+                        "Medium",
+                        f"CMS {cms_name} detected.",
+                        rec,
+                    )
 
         self.update_cms(self.detected_cms)
         if not self.detected_cms:
@@ -472,12 +611,14 @@ class PDFReportGenerator:
     # (background, text) per severity: readable on white paper
     SEVERITY_STYLE = {
         "Critical": (ACCENT, INK),
-        "High":     (PRIMARY, TEXT),
-        "Medium":   (TEXT_DIM, INK),
-        "Low":      (TEXT, INK),
+        "High": (PRIMARY, TEXT),
+        "Medium": (TEXT_DIM, INK),
+        "Low": (TEXT, INK),
     }
 
-    def __init__(self, url, results, output_path, sql_source="Default", xss_source="Default"):
+    def __init__(
+        self, url, results, output_path, sql_source="Default", xss_source="Default"
+    ):
         self.url = url
         self.results = results
         self.output_path = output_path
@@ -486,19 +627,35 @@ class PDFReportGenerator:
 
     def generate(self):
         hx = colors.HexColor
-        doc = SimpleDocTemplate(self.output_path, pagesize=A4,
-                                 topMargin=1.5 * cm, bottomMargin=1.5 * cm,
-                                 leftMargin=1.5 * cm, rightMargin=1.5 * cm)
+        doc = SimpleDocTemplate(
+            self.output_path,
+            pagesize=A4,
+            topMargin=1.5 * cm,
+            bottomMargin=1.5 * cm,
+            leftMargin=1.5 * cm,
+            rightMargin=1.5 * cm,
+        )
         styles = getSampleStyleSheet()
-        title_style = ParagraphStyle("TitleStyle", parent=styles["Title"],
-                                      textColor=hx(PRIMARY), alignment=TA_CENTER)
-        normal_style = ParagraphStyle("NormalStyle", parent=styles["Normal"], fontSize=9)
-        heading_style = ParagraphStyle("HeadingStyle", parent=styles["Heading2"],
-                                        textColor=hx(PRIMARY))
+        title_style = ParagraphStyle(
+            "TitleStyle",
+            parent=styles["Title"],
+            textColor=hx(PRIMARY),
+            alignment=TA_CENTER,
+        )
+        normal_style = ParagraphStyle(
+            "NormalStyle", parent=styles["Normal"], fontSize=9
+        )
+        heading_style = ParagraphStyle(
+            "HeadingStyle", parent=styles["Heading2"], textColor=hx(PRIMARY)
+        )
         # Paragraphs ignore table TEXTCOLOR, so each severity gets its own style
         severity_styles = {
-            sev: ParagraphStyle(f"Sev{sev}", parent=normal_style,
-                                fontName="Helvetica-Bold", textColor=hx(fg))
+            sev: ParagraphStyle(
+                f"Sev{sev}",
+                parent=normal_style,
+                fontName="Helvetica-Bold",
+                textColor=hx(fg),
+            )
             for sev, (bg, fg) in self.SEVERITY_STYLE.items()
         }
 
@@ -509,9 +666,18 @@ class PDFReportGenerator:
         elements.append(Spacer(1, 0.4 * cm))
 
         elements.append(Paragraph(f"<b>Target:</b> {escape(self.url)}", normal_style))
-        elements.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
-        elements.append(Paragraph(f"<b>SQLi wordlist:</b> {escape(self.sql_source)}", normal_style))
-        elements.append(Paragraph(f"<b>XSS wordlist:</b> {escape(self.xss_source)}", normal_style))
+        elements.append(
+            Paragraph(
+                f"<b>Date:</b> {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                normal_style,
+            )
+        )
+        elements.append(
+            Paragraph(f"<b>SQLi wordlist:</b> {escape(self.sql_source)}", normal_style)
+        )
+        elements.append(
+            Paragraph(f"<b>XSS wordlist:</b> {escape(self.xss_source)}", normal_style)
+        )
         elements.append(Spacer(1, 0.5 * cm))
 
         severities = ["Critical", "High", "Medium", "Low"]
@@ -547,14 +713,20 @@ class PDFReportGenerator:
         else:
             table_data = [["Type", "Severity", "Description", "Detail"]]
             for r in self.results:
-                table_data.append([
-                    Paragraph(escape(r["type"]), normal_style),
-                    Paragraph(escape(r["severity"]),
-                              severity_styles.get(r["severity"], normal_style)),
-                    Paragraph(escape(r["description"]), normal_style),
-                    Paragraph(escape(r.get("detail", "")), normal_style),
-                ])
-            findings_table = Table(table_data, colWidths=[3.5 * cm, 2 * cm, 6 * cm, 5.5 * cm], repeatRows=1)
+                table_data.append(
+                    [
+                        Paragraph(escape(r["type"]), normal_style),
+                        Paragraph(
+                            escape(r["severity"]),
+                            severity_styles.get(r["severity"], normal_style),
+                        ),
+                        Paragraph(escape(r["description"]), normal_style),
+                        Paragraph(escape(r.get("detail", "")), normal_style),
+                    ]
+                )
+            findings_table = Table(
+                table_data, colWidths=[3.5 * cm, 2 * cm, 6 * cm, 5.5 * cm], repeatRows=1
+            )
             style_cmds = [
                 ("BACKGROUND", (0, 0), (-1, 0), hx(PRIMARY)),
                 ("TEXTCOLOR", (0, 0), (-1, 0), hx(TEXT)),
@@ -575,17 +747,24 @@ class PDFReportGenerator:
         elements.append(Spacer(1, 0.6 * cm))
         elements.append(HRFlowable(width="100%", thickness=2, color=hx(PRIMARY)))
         elements.append(Spacer(1, 0.2 * cm))
-        elements.append(Paragraph(
-            "Confidential report - EthicalScanner - For authorized security testing only.",
-            ParagraphStyle("Footer", parent=styles["Normal"], fontSize=7,
-                           textColor=hx(MUTED), alignment=TA_CENTER)))
+        elements.append(
+            Paragraph(
+                "Confidential report - EthicalScanner - For authorized security testing only.",
+                ParagraphStyle(
+                    "Footer",
+                    parent=styles["Normal"],
+                    fontSize=7,
+                    textColor=hx(MUTED),
+                    alignment=TA_CENTER,
+                ),
+            )
+        )
 
         doc.build(elements)
 
 
 #  GRAPHICAL INTERFACE
-class ScannerApp(tk.Tk):
-
+class ScannerApp(tk.Tk if GUI_AVAILABLE else object):
     def __init__(self):
         super().__init__()
         self.title("EthicalScanner")
@@ -596,7 +775,7 @@ class ScannerApp(tk.Tk):
         self.scanned_cms = []
         self.scanned_url = ""
         self.scan_sources = ("Default", "Default")
-        self.wordlist = WordlistManager()   # Wordlist manager
+        self.wordlist = WordlistManager()  # Wordlist manager
         self._build_ui()
 
     #  UI CONSTRUCTION
@@ -605,31 +784,66 @@ class ScannerApp(tk.Tk):
         # -- Header --
         header = tk.Frame(self, bg=PRIMARY, pady=10)
         header.pack(fill="x")
-        tk.Label(header, text="ETHICAL SCANNER",
-                 font=("Courier New", 20, "bold"), fg=ACCENT, bg=PRIMARY).pack()
-        tk.Label(header, text="Web vulnerability scanner  |  For authorized use only",
-                 font=("Courier New", 10), fg=TEXT_DIM, bg=PRIMARY).pack()
+        tk.Label(
+            header,
+            text="ETHICAL SCANNER",
+            font=("Courier New", 20, "bold"),
+            fg=ACCENT,
+            bg=PRIMARY,
+        ).pack()
+        tk.Label(
+            header,
+            text="Web vulnerability scanner  |  For authorized use only",
+            font=("Courier New", 10),
+            fg=TEXT_DIM,
+            bg=PRIMARY,
+        ).pack()
         tk.Frame(self, bg=ACCENT, height=3).pack(fill="x")
 
         # -- URL bar --
         bar = tk.Frame(self, bg=BG, pady=8, padx=16)
         bar.pack(fill="x")
-        tk.Label(bar, text="URL:", font=("Courier New", 12, "bold"),
-                 fg=ACCENT, bg=BG).pack(side="left", padx=(0, 8))
-        self.url_field = tk.Entry(bar, font=("Courier New", 13),
-            bg=SURFACE_HI, fg=TEXT, insertbackground=ACCENT,
-            relief="flat", bd=0, highlightthickness=1,
-            highlightbackground=BORDER, highlightcolor=ACCENT)
+        tk.Label(
+            bar, text="URL:", font=("Courier New", 12, "bold"), fg=ACCENT, bg=BG
+        ).pack(side="left", padx=(0, 8))
+        self.url_field = tk.Entry(
+            bar,
+            font=("Courier New", 13),
+            bg=SURFACE_HI,
+            fg=TEXT,
+            insertbackground=ACCENT,
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=ACCENT,
+        )
         self.url_field.pack(side="left", fill="x", expand=True, ipady=5, padx=(0, 10))
         self.url_field.insert(0, "https://")
-        self.scan_btn = tk.Button(bar, text="  >  FULL SCAN  ",
-            font=("Courier New", 12, "bold"), bg=ACCENT, fg=INK,
-            activebackground=TEXT, activeforeground=INK, disabledforeground=MUTED,
-            relief="flat", cursor="hand2", command=self.start_scan)
+        self.scan_btn = tk.Button(
+            bar,
+            text="  >  FULL SCAN  ",
+            font=("Courier New", 12, "bold"),
+            bg=ACCENT,
+            fg=INK,
+            activebackground=TEXT,
+            activeforeground=INK,
+            disabledforeground=MUTED,
+            relief="flat",
+            cursor="hand2",
+            command=self.start_scan,
+        )
         self.scan_btn.pack(side="left")
-        tk.Button(bar, text="  X  ", font=("Courier New", 12),
-            bg=PRIMARY, fg=TEXT, relief="flat",
-            cursor="hand2", command=self.clear_all).pack(side="left", padx=5)
+        tk.Button(
+            bar,
+            text="  X  ",
+            font=("Courier New", 12),
+            bg=PRIMARY,
+            fg=TEXT,
+            relief="flat",
+            cursor="hand2",
+            command=self.clear_all,
+        ).pack(side="left", padx=5)
 
         # -- Body --
         body = tk.Frame(self, bg=BG)
@@ -639,42 +853,113 @@ class ScannerApp(tk.Tk):
         col_left = tk.Frame(body, bg=BG, width=380)
         col_left.pack(side="left", fill="both", padx=(0, 8))
         col_left.pack_propagate(False)
-        tk.Label(col_left, text="LIVE LOG",
-                 font=("Courier New", 10, "bold"), fg=TEXT_DIM,
-                 bg=BG).pack(anchor="w", pady=(0, 3))
-        self.log_area = scrolledtext.ScrolledText(col_left, font=("Courier New", 10),
-            bg=SURFACE, fg=ON_SURFACE, insertbackground=ON_SURFACE_HI,
-            relief="flat", bd=0, state="disabled", wrap="word", padx=8, pady=6)
+        tk.Label(
+            col_left,
+            text="LIVE LOG",
+            font=("Courier New", 10, "bold"),
+            fg=TEXT_DIM,
+            bg=BG,
+        ).pack(anchor="w", pady=(0, 3))
+        self.log_area = scrolledtext.ScrolledText(
+            col_left,
+            font=("Courier New", 10),
+            bg=SURFACE,
+            fg=ON_SURFACE,
+            insertbackground=ON_SURFACE_HI,
+            relief="flat",
+            bd=0,
+            state="disabled",
+            wrap="word",
+            padx=8,
+            pady=6,
+        )
         self.log_area.pack(fill="both", expand=True)
         self._style_scrollbar(self.log_area)
-        for t, c in [("info", ON_SURFACE_DIM), ("ok", ON_SURFACE), ("vuln", ON_SURFACE_HI),
-                     ("warn", ON_SURFACE_HI), ("scan", ON_SURFACE_DIM), ("title", ON_SURFACE_HI)]:
-            self.log_area.tag_config(t, foreground=c,
-                font=("Courier New", 10, "bold") if t in ("title", "vuln") else ("Courier New", 10))
+        for t, c in [
+            ("info", ON_SURFACE_DIM),
+            ("ok", ON_SURFACE),
+            ("vuln", ON_SURFACE_HI),
+            ("warn", ON_SURFACE_HI),
+            ("scan", ON_SURFACE_DIM),
+            ("title", ON_SURFACE_HI),
+        ]:
+            self.log_area.tag_config(
+                t,
+                foreground=c,
+                font=("Courier New", 10, "bold")
+                if t in ("title", "vuln")
+                else ("Courier New", 10),
+            )
 
         # Right column: TABS
         col_right = tk.Frame(body, bg=BG)
         col_right.pack(side="right", fill="both", expand=True)
 
-        style = ttk.Style(); style.theme_use("clam")
-        style.configure("TNotebook", background=BG, borderwidth=0,
-            bordercolor=BORDER, lightcolor=BG, darkcolor=BG)
-        style.configure("TNotebook.Tab", background=SURFACE_HI, foreground=TEXT_DIM,
-            font=("Courier New", 10, "bold"), padding=[10, 5], borderwidth=1,
-            bordercolor=BORDER, lightcolor=SURFACE_HI, darkcolor=SURFACE_HI)
-        style.map("TNotebook.Tab", background=[("selected", PRIMARY)],
-            foreground=[("selected", ACCENT)])
-        style.configure("Treeview", background=SURFACE, foreground=ON_SURFACE,
-            fieldbackground=SURFACE, rowheight=30, font=("Courier New", 10), borderwidth=0,
-            bordercolor=BORDER, lightcolor=SURFACE, darkcolor=SURFACE)
-        style.configure("Treeview.Heading", background=PRIMARY, foreground=TEXT,
-            font=("Courier New", 10, "bold"), borderwidth=0)
-        style.map("Treeview", background=[("selected", PRIMARY)],
-            foreground=[("selected", TEXT)])
-        style.configure("TProgressbar", troughcolor=SURFACE_HI, background=ACCENT,
-            bordercolor=BORDER, lightcolor=ACCENT, darkcolor=ACCENT)
-        style.configure("Vertical.TScrollbar", background=PRIMARY, troughcolor=SURFACE,
-            bordercolor=BORDER, arrowcolor=TEXT)
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure(
+            "TNotebook",
+            background=BG,
+            borderwidth=0,
+            bordercolor=BORDER,
+            lightcolor=BG,
+            darkcolor=BG,
+        )
+        style.configure(
+            "TNotebook.Tab",
+            background=SURFACE_HI,
+            foreground=TEXT_DIM,
+            font=("Courier New", 10, "bold"),
+            padding=[10, 5],
+            borderwidth=1,
+            bordercolor=BORDER,
+            lightcolor=SURFACE_HI,
+            darkcolor=SURFACE_HI,
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", PRIMARY)],
+            foreground=[("selected", ACCENT)],
+        )
+        style.configure(
+            "Treeview",
+            background=SURFACE,
+            foreground=ON_SURFACE,
+            fieldbackground=SURFACE,
+            rowheight=30,
+            font=("Courier New", 10),
+            borderwidth=0,
+            bordercolor=BORDER,
+            lightcolor=SURFACE,
+            darkcolor=SURFACE,
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=PRIMARY,
+            foreground=TEXT,
+            font=("Courier New", 10, "bold"),
+            borderwidth=0,
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", PRIMARY)],
+            foreground=[("selected", TEXT)],
+        )
+        style.configure(
+            "TProgressbar",
+            troughcolor=SURFACE_HI,
+            background=ACCENT,
+            bordercolor=BORDER,
+            lightcolor=ACCENT,
+            darkcolor=ACCENT,
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            background=PRIMARY,
+            troughcolor=SURFACE,
+            bordercolor=BORDER,
+            arrowcolor=TEXT,
+        )
 
         self.notebook = ttk.Notebook(col_right)
         self.notebook.pack(fill="both", expand=True)
@@ -691,26 +976,50 @@ class ScannerApp(tk.Tk):
         # -- Status bar --
         bottom = tk.Frame(self, bg=INK, pady=5, padx=16)
         bottom.pack(fill="x", side="bottom")
-        self.status_label = tk.Label(bottom, text="Ready",
-            font=("Courier New", 10), fg=TEXT, bg=INK)
+        self.status_label = tk.Label(
+            bottom, text="Ready", font=("Courier New", 10), fg=TEXT, bg=INK
+        )
         self.status_label.pack(side="left")
         self.progress = ttk.Progressbar(bottom, mode="indeterminate", length=140)
         self.progress.pack(side="left", padx=12)
-        self.count_label = tk.Label(bottom, text="0 vuln",
-            font=("Courier New", 10, "bold"), fg=TEXT_DIM, bg=INK)
+        self.count_label = tk.Label(
+            bottom, text="0 vuln", font=("Courier New", 10, "bold"), fg=TEXT_DIM, bg=INK
+        )
         self.count_label.pack(side="left")
-        self.wordlist_status_label = tk.Label(bottom,
+        self.wordlist_status_label = tk.Label(
+            bottom,
             text=f"SQLi: {len(self.wordlist.sql_payloads)} default | XSS: {len(self.wordlist.xss_payloads)} default",
-            font=("Courier New", 9), fg=TEXT_DIM, bg=INK)
+            font=("Courier New", 9),
+            fg=TEXT_DIM,
+            bg=INK,
+        )
         self.wordlist_status_label.pack(side="left", padx=12)
-        self.html_btn = tk.Button(bottom, text="HTML", font=("Courier New", 10),
-            bg=PRIMARY, fg=TEXT, disabledforeground=MUTED, relief="flat", cursor="hand2",
-            state="disabled", command=self.export_html)
+        self.html_btn = tk.Button(
+            bottom,
+            text="HTML",
+            font=("Courier New", 10),
+            bg=PRIMARY,
+            fg=TEXT,
+            disabledforeground=MUTED,
+            relief="flat",
+            cursor="hand2",
+            state="disabled",
+            command=self.export_html,
+        )
         self.html_btn.pack(side="right", padx=3)
         if PDF_AVAILABLE:
-            self.pdf_btn = tk.Button(bottom, text="PDF", font=("Courier New", 10, "bold"),
-                bg=PRIMARY, fg=TEXT, disabledforeground=MUTED, relief="flat", cursor="hand2",
-                state="disabled", command=self.export_pdf)
+            self.pdf_btn = tk.Button(
+                bottom,
+                text="PDF",
+                font=("Courier New", 10, "bold"),
+                bg=PRIMARY,
+                fg=TEXT,
+                disabledforeground=MUTED,
+                relief="flat",
+                cursor="hand2",
+                state="disabled",
+                command=self.export_pdf,
+            )
             self.pdf_btn.pack(side="right", padx=3)
         else:
             self.pdf_btn = None
@@ -723,14 +1032,19 @@ class ScannerApp(tk.Tk):
         self.table = ttk.Treeview(tab, columns=cols, show="headings")
         for col in cols:
             self.table.heading(col, text=col)
-        self.table.column("Type",        width=320)
-        self.table.column("Severity",    width=100, minwidth=100, stretch=False)
+        self.table.column("Type", width=320)
+        self.table.column("Severity", width=100, minwidth=100, stretch=False)
         self.table.column("Description", width=380)
         # Hierarchy on the slate panel: filled row > bold emphasis > text > dim
-        self.table.tag_configure("Critical", background=ACCENT, foreground=INK,
-            font=("Courier New", 10, "bold"))
-        self.table.tag_configure("High", foreground=ON_SURFACE_HI,
-            font=("Courier New", 10, "bold"))
+        self.table.tag_configure(
+            "Critical",
+            background=ACCENT,
+            foreground=INK,
+            font=("Courier New", 10, "bold"),
+        )
+        self.table.tag_configure(
+            "High", foreground=ON_SURFACE_HI, font=("Courier New", 10, "bold")
+        )
         self.table.tag_configure("Medium", foreground=ON_SURFACE)
         self.table.tag_configure("Low", foreground=ON_SURFACE_DIM)
         sb = ttk.Scrollbar(tab, orient="vertical", command=self.table.yview)
@@ -752,15 +1066,28 @@ class ScannerApp(tk.Tk):
         # -- Title --
         title_frame = tk.Frame(tab, bg=BG, pady=10, padx=14)
         title_frame.pack(fill="x")
-        tk.Label(title_frame, text="PAYLOAD WORDLIST MANAGEMENT",
-                 font=("Courier New", 13, "bold"), fg=ACCENT, bg=BG).pack(anchor="w")
-        tk.Label(title_frame,
-                 text="Load your own .txt payload files for SQLi and XSS (one entry per line, # = comment)",
-                 font=("Courier New", 10), fg=TEXT_DIM, bg=BG).pack(anchor="w", pady=(2, 0))
+        tk.Label(
+            title_frame,
+            text="PAYLOAD WORDLIST MANAGEMENT",
+            font=("Courier New", 13, "bold"),
+            fg=ACCENT,
+            bg=BG,
+        ).pack(anchor="w")
+        tk.Label(
+            title_frame,
+            text="Load your own .txt payload files for SQLi and XSS (one entry per line, # = comment)",
+            font=("Courier New", 10),
+            fg=TEXT_DIM,
+            bg=BG,
+        ).pack(anchor="w", pady=(2, 0))
 
-        tk.Label(title_frame,
-                 text="Sample wordlists are in the 'wordlists/' folder next to this script",
-                 font=("Courier New", 10), fg=TEXT, bg=BG).pack(anchor="w", pady=(2, 0))
+        tk.Label(
+            title_frame,
+            text="Sample wordlists are in the 'wordlists/' folder next to this script",
+            font=("Courier New", 10),
+            fg=TEXT,
+            bg=BG,
+        ).pack(anchor="w", pady=(2, 0))
 
         sep = tk.Frame(tab, bg=BORDER, height=1)
         sep.pack(fill="x", padx=14, pady=4)
@@ -769,7 +1096,7 @@ class ScannerApp(tk.Tk):
         content = tk.Frame(tab, bg=BG)
         content.pack(fill="both", expand=True, padx=14, pady=4)
 
-        # -- SQLi section --------------------------------------
+        # -- SQLi section
         self._wordlist_section(
             parent=content,
             title="SQLi WORDLIST (SQL Injection)",
@@ -799,19 +1126,28 @@ class ScannerApp(tk.Tk):
         frame.pack(fill="both", expand=True)
 
         # Section title
-        tk.Label(frame, text=title, font=("Courier New", 12, "bold"),
-                 fg=color, bg=BG).pack(anchor="w", pady=(4, 6))
+        tk.Label(
+            frame, text=title, font=("Courier New", 12, "bold"), fg=color, bg=BG
+        ).pack(anchor="w", pady=(4, 6))
 
         # Row: file field + buttons
         file_row = tk.Frame(frame, bg=BG)
         file_row.pack(fill="x", pady=(0, 6))
 
         # File path field
-        field = tk.Entry(file_row, font=("Courier New", 11),
-            bg=SURFACE_HI, fg=TEXT_DIM, insertbackground=ACCENT,
-            relief="flat", bd=0, highlightthickness=1,
-            highlightbackground=BORDER, highlightcolor=color,
-            width=52)
+        field = tk.Entry(
+            file_row,
+            font=("Courier New", 11),
+            bg=SURFACE_HI,
+            fg=TEXT_DIM,
+            insertbackground=ACCENT,
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=color,
+            width=52,
+        )
         field.pack(side="left", fill="x", expand=True, ipady=5, padx=(0, 6))
         field.insert(0, "No file loaded - using default payloads")
 
@@ -820,36 +1156,60 @@ class ScannerApp(tk.Tk):
             file_path = filedialog.askopenfilename(
                 title=f"Choose the {payload_type.upper()} wordlist",
                 initialdir=SAMPLES_DIR if os.path.isdir(SAMPLES_DIR) else os.getcwd(),
-                filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
             )
             if file_path:
                 field.delete(0, "end")
                 field.insert(0, file_path)
                 field.config(fg=TEXT)
 
-        tk.Button(file_row, text="Browse",
-            font=("Courier New", 10), bg=PRIMARY, fg=TEXT,
-            relief="flat", cursor="hand2", command=browse).pack(side="left", padx=(0, 4))
+        tk.Button(
+            file_row,
+            text="Browse",
+            font=("Courier New", 10),
+            bg=PRIMARY,
+            fg=TEXT,
+            relief="flat",
+            cursor="hand2",
+            command=browse,
+        ).pack(side="left", padx=(0, 4))
 
         # Counter label (dynamic)
-        count_label = tk.Label(file_row,
-            text=f"{len(self.wordlist.sql_payloads if payload_type=='sql' else self.wordlist.xss_payloads)} payloads",
-            font=("Courier New", 10, "bold"), fg=color, bg=BG, width=12)
+        count_label = tk.Label(
+            file_row,
+            text=f"{len(self.wordlist.sql_payloads if payload_type == 'sql' else self.wordlist.xss_payloads)} payloads",
+            font=("Courier New", 10, "bold"),
+            fg=color,
+            bg=BG,
+            width=12,
+        )
         count_label.pack(side="left", padx=(0, 4))
 
         # Payload preview area
         preview_frame = tk.Frame(frame, bg=SURFACE, bd=0)
         preview_frame.pack(fill="both", expand=True, pady=(0, 4))
 
-        tk.Label(preview_frame, text="Active payload preview:",
-                 font=("Courier New", 9, "bold"), fg=ON_SURFACE_DIM,
-                 bg=SURFACE).pack(anchor="w", padx=8, pady=(4, 0))
+        tk.Label(
+            preview_frame,
+            text="Active payload preview:",
+            font=("Courier New", 9, "bold"),
+            fg=ON_SURFACE_DIM,
+            bg=SURFACE,
+        ).pack(anchor="w", padx=8, pady=(4, 0))
 
-        preview_area = scrolledtext.ScrolledText(preview_frame,
-            font=("Courier New", 10), bg=SURFACE,
+        preview_area = scrolledtext.ScrolledText(
+            preview_frame,
+            font=("Courier New", 10),
+            bg=SURFACE,
             fg=ON_SURFACE_HI if payload_type == "sql" else ON_SURFACE,
-            relief="flat", bd=0, height=6, state="normal",
-            padx=8, pady=4, wrap="none")
+            relief="flat",
+            bd=0,
+            height=6,
+            state="normal",
+            padx=8,
+            pady=4,
+            wrap="none",
+        )
         preview_area.pack(fill="both", expand=True)
         self._style_scrollbar(preview_area)
 
@@ -860,12 +1220,18 @@ class ScannerApp(tk.Tk):
             for i, p in enumerate(payloads[:50], 1):
                 preview_area.insert("end", f"  {i:>3}. {p}\n")
             if len(payloads) > 50:
-                preview_area.insert("end", f"\n  ... and {len(payloads)-50} more payloads\n", )
+                preview_area.insert(
+                    "end",
+                    f"\n  ... and {len(payloads) - 50} more payloads\n",
+                )
             preview_area.config(state="disabled")
 
         # Show default payloads on startup
-        update_preview(self.wordlist.sql_payloads if payload_type == "sql"
-                    else self.wordlist.xss_payloads)
+        update_preview(
+            self.wordlist.sql_payloads
+            if payload_type == "sql"
+            else self.wordlist.xss_payloads
+        )
 
         # Load / reset buttons
         btn_row = tk.Frame(frame, bg=BG)
@@ -887,14 +1253,22 @@ class ScannerApp(tk.Tk):
                 messagebox.showerror("Error", f"Could not load:\n{error}")
                 return
 
-            payloads = (self.wordlist.sql_payloads if payload_type == "sql"
-                        else self.wordlist.xss_payloads)
+            payloads = (
+                self.wordlist.sql_payloads
+                if payload_type == "sql"
+                else self.wordlist.xss_payloads
+            )
             update_preview(payloads)
             count_label.config(text=f"{nb} payloads")
             self._update_wordlist_status()
-            self.log_msg(f"Wordlist {payload_type.upper()} loaded: {nb} payloads from {os.path.basename(file_path)}", "ok")
-            messagebox.showinfo("Loaded",
-                f"{nb} {payload_type.upper()} payloads loaded\n\nFile: {os.path.basename(file_path)}")
+            self.log_msg(
+                f"Wordlist {payload_type.upper()} loaded: {nb} payloads from {os.path.basename(file_path)}",
+                "ok",
+            )
+            messagebox.showinfo(
+                "Loaded",
+                f"{nb} {payload_type.upper()} payloads loaded\n\nFile: {os.path.basename(file_path)}",
+            )
 
         def reset():
             """Restores the default payloads."""
@@ -902,8 +1276,11 @@ class ScannerApp(tk.Tk):
                 self.wordlist.reset_sql()
             else:
                 self.wordlist.reset_xss()
-            payloads = (self.wordlist.sql_payloads if payload_type == "sql"
-                        else self.wordlist.xss_payloads)
+            payloads = (
+                self.wordlist.sql_payloads
+                if payload_type == "sql"
+                else self.wordlist.xss_payloads
+            )
             field.delete(0, "end")
             field.insert(0, "No file loaded - using default payloads")
             field.config(fg=TEXT_DIM)
@@ -912,32 +1289,64 @@ class ScannerApp(tk.Tk):
             self._update_wordlist_status()
             self.log_msg(f"Wordlist {payload_type.upper()} reset to defaults", "info")
 
-        tk.Button(btn_row, text="LOAD THIS WORDLIST",
-            font=("Courier New", 11, "bold"), bg=ACCENT,
-            fg=INK, relief="flat", cursor="hand2", command=load).pack(side="left", padx=(0, 8))
+        tk.Button(
+            btn_row,
+            text="LOAD THIS WORDLIST",
+            font=("Courier New", 11, "bold"),
+            bg=ACCENT,
+            fg=INK,
+            relief="flat",
+            cursor="hand2",
+            command=load,
+        ).pack(side="left", padx=(0, 8))
 
-        tk.Button(btn_row, text="Reset to default",
-            font=("Courier New", 10), bg=SURFACE_HI, fg=TEXT_DIM,
-            relief="flat", cursor="hand2", command=reset).pack(side="left")
+        tk.Button(
+            btn_row,
+            text="Reset to default",
+            font=("Courier New", 10),
+            bg=SURFACE_HI,
+            fg=TEXT_DIM,
+            relief="flat",
+            cursor="hand2",
+            command=reset,
+        ).pack(side="left")
 
         # Format info label
-        tk.Label(btn_row,
+        tk.Label(
+            btn_row,
             text="  .txt format: one entry per line, # for comments",
-            font=("Courier New", 9), fg=TEXT_DIM, bg=BG).pack(side="left", padx=12)
+            font=("Courier New", 9),
+            fg=TEXT_DIM,
+            bg=BG,
+        ).pack(side="left", padx=12)
 
     # -----------------------------------------
     def _tab_cms(self):
         tab_cms = tk.Frame(self.notebook, bg=BG, padx=14, pady=14)
         self.notebook.add(tab_cms, text="CMS Detection")
-        tk.Label(tab_cms, text="AUTOMATIC CMS DETECTION",
-                 font=("Courier New", 13, "bold"), fg=ACCENT, bg=BG).pack(anchor="w")
-        tk.Label(tab_cms, text="WordPress, Joomla, Drupal, Magento, Laravel...",
-                 font=("Courier New", 10), fg=TEXT_DIM, bg=BG).pack(anchor="w", pady=(2, 10))
+        tk.Label(
+            tab_cms,
+            text="AUTOMATIC CMS DETECTION",
+            font=("Courier New", 13, "bold"),
+            fg=ACCENT,
+            bg=BG,
+        ).pack(anchor="w")
+        tk.Label(
+            tab_cms,
+            text="WordPress, Joomla, Drupal, Magento, Laravel...",
+            font=("Courier New", 10),
+            fg=TEXT_DIM,
+            bg=BG,
+        ).pack(anchor="w", pady=(2, 10))
         self.cms_frame = tk.Frame(tab_cms, bg=BG)
         self.cms_frame.pack(fill="both", expand=True)
-        self.cms_empty_label = tk.Label(self.cms_frame,
+        self.cms_empty_label = tk.Label(
+            self.cms_frame,
             text="Run a scan to detect the target site's CMS.",
-            font=("Courier New", 12), fg=TEXT_DIM, bg=BG)
+            font=("Courier New", 12),
+            fg=TEXT_DIM,
+            bg=BG,
+        )
         self.cms_empty_label.pack(pady=40)
 
     # -----------------------------------------
@@ -981,8 +1390,16 @@ FOR AUTHORIZED, ETHICAL USE ONLY
     Only test sites you own or for which
     you have explicit written authorization.
 """
-        z = scrolledtext.ScrolledText(tab_help, font=("Courier New", 11),
-            bg=SURFACE, fg=ON_SURFACE, relief="flat", bd=0, padx=10, pady=10)
+        z = scrolledtext.ScrolledText(
+            tab_help,
+            font=("Courier New", 11),
+            bg=SURFACE,
+            fg=ON_SURFACE,
+            relief="flat",
+            bd=0,
+            padx=10,
+            pady=10,
+        )
         z.insert("end", help_text)
         z.config(state="disabled")
         z.pack(fill="both", expand=True)
@@ -992,22 +1409,35 @@ FOR AUTHORIZED, ETHICAL USE ONLY
     @staticmethod
     def _style_scrollbar(widget):
         """ScrolledText ships a classic tk scrollbar: recolor it to match the theme."""
-        widget.vbar.config(bg=PRIMARY, troughcolor=SURFACE, activebackground=ACCENT,
-                           highlightthickness=0, bd=0, relief="flat")
-        widget.config(highlightthickness=1, highlightbackground=BORDER, highlightcolor=BORDER)
+        widget.vbar.config(
+            bg=PRIMARY,
+            troughcolor=SURFACE,
+            activebackground=ACCENT,
+            highlightthickness=0,
+            bd=0,
+            relief="flat",
+        )
+        widget.config(
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=BORDER
+        )
 
     def _update_wordlist_status(self):
         """Updates the wordlist status label in the bottom bar."""
-        sql_info = (f"{len(self.wordlist.sql_payloads)} custom"
-                    if self.wordlist.sql_file
-                    else f"{len(self.wordlist.sql_payloads)} default")
-        xss_info = (f"{len(self.wordlist.xss_payloads)} custom"
-                    if self.wordlist.xss_file
-                    else f"{len(self.wordlist.xss_payloads)} default")
+        sql_info = (
+            f"{len(self.wordlist.sql_payloads)} custom"
+            if self.wordlist.sql_file
+            else f"{len(self.wordlist.sql_payloads)} default"
+        )
+        xss_info = (
+            f"{len(self.wordlist.xss_payloads)} custom"
+            if self.wordlist.xss_file
+            else f"{len(self.wordlist.xss_payloads)} default"
+        )
         self.wordlist_status_label.config(
             text=f"SQLi: {sql_info} | XSS: {xss_info}",
-            fg=ACCENT if (self.wordlist.sql_file or self.wordlist.xss_file)
-               else TEXT_DIM
+            fg=ACCENT
+            if (self.wordlist.sql_file or self.wordlist.xss_file)
+            else TEXT_DIM,
         )
 
     def log_msg(self, msg, msg_type="info"):
@@ -1016,16 +1446,25 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             self.log_area.insert("end", f"{msg}\n", msg_type)
             self.log_area.see("end")
             self.log_area.config(state="disabled")
+
         self.after(0, _)
 
     def add_vuln(self, vuln):
         def _():
-            desc = vuln["description"][:55] + "..." if len(vuln["description"]) > 55 else vuln["description"]
-            self.table.insert("", "end",
-                values=(vuln["type"], vuln["severity"], desc), tags=(vuln["severity"],))
+            desc = (
+                vuln["description"][:55] + "..."
+                if len(vuln["description"]) > 55
+                else vuln["description"]
+            )
+            self.table.insert(
+                "",
+                "end",
+                values=(vuln["type"], vuln["severity"], desc),
+                tags=(vuln["severity"],),
+            )
             nb = len(self.table.get_children())
-            self.count_label.config(text=f"{nb} vuln",
-                fg=ACCENT if nb > 0 else TEXT)
+            self.count_label.config(text=f"{nb} vuln", fg=ACCENT if nb > 0 else TEXT)
+
         self.after(0, _)
 
     def update_cms_ui(self, detected_cms):
@@ -1033,9 +1472,13 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             for w in self.cms_frame.winfo_children():
                 w.destroy()
             if not detected_cms:
-                tk.Label(self.cms_frame,
+                tk.Label(
+                    self.cms_frame,
                     text="No known CMS detected",
-                    font=("Courier New", 12), fg=TEXT, bg=BG).pack(pady=30)
+                    font=("Courier New", 12),
+                    fg=TEXT,
+                    bg=BG,
+                ).pack(pady=30)
                 return
             self.notebook.tab(2, text=f"CMS ({len(detected_cms)})")
             for cms in detected_cms:
@@ -1043,17 +1486,39 @@ FOR AUTHORIZED, ETHICAL USE ONLY
                 card.pack(fill="x", pady=3)
                 l1 = tk.Frame(card, bg=SURFACE_HI)
                 l1.pack(fill="x")
-                tk.Label(l1, text=f"{cms['icon']} {cms['name']}",
-                         font=("Courier New", 14, "bold"), fg=ACCENT, bg=SURFACE_HI).pack(side="left")
-                tk.Label(l1, text=f"  confidence {cms['confidence']}%",
-                         font=("Courier New", 10), fg=TEXT, bg=SURFACE_HI).pack(side="left")
+                tk.Label(
+                    l1,
+                    text=f"{cms['icon']} {cms['name']}",
+                    font=("Courier New", 14, "bold"),
+                    fg=ACCENT,
+                    bg=SURFACE_HI,
+                ).pack(side="left")
+                tk.Label(
+                    l1,
+                    text=f"  confidence {cms['confidence']}%",
+                    font=("Courier New", 10),
+                    fg=TEXT,
+                    bg=SURFACE_HI,
+                ).pack(side="left")
                 for p in cms["evidence"]:
-                    tk.Label(card, text=f"  -> {p}",
-                             font=("Courier New", 10), fg=TEXT, bg=SURFACE_HI).pack(anchor="w")
+                    tk.Label(
+                        card,
+                        text=f"  -> {p}",
+                        font=("Courier New", 10),
+                        fg=TEXT,
+                        bg=SURFACE_HI,
+                    ).pack(anchor="w")
                 for r in cms["known_vulns"]:
-                    tk.Label(card, text=f"  ! {r}",
-                             font=("Courier New", 10), fg=ACCENT, bg=SURFACE_HI,
-                             wraplength=600, justify="left").pack(anchor="w")
+                    tk.Label(
+                        card,
+                        text=f"  ! {r}",
+                        font=("Courier New", 10),
+                        fg=ACCENT,
+                        bg=SURFACE_HI,
+                        wraplength=600,
+                        justify="left",
+                    ).pack(anchor="w")
+
         self.after(0, _)
 
     #  SCAN
@@ -1073,13 +1538,25 @@ FOR AUTHORIZED, ETHICAL USE ONLY
         self.progress.start(10)
         self.status_label.config(text="Scan in progress...", fg=ACCENT)
 
-        sql_src = f"file ({os.path.basename(self.wordlist.sql_file)})" if self.wordlist.sql_file else "default"
-        xss_src = f"file ({os.path.basename(self.wordlist.xss_file)})" if self.wordlist.xss_file else "default"
+        sql_src = (
+            f"file ({os.path.basename(self.wordlist.sql_file)})"
+            if self.wordlist.sql_file
+            else "default"
+        )
+        xss_src = (
+            f"file ({os.path.basename(self.wordlist.xss_file)})"
+            if self.wordlist.xss_file
+            else "default"
+        )
         # Remember what was used for THIS scan, even if wordlists change before export
         self.scan_sources = self._wordlist_sources()
         self.log_msg(f"=== SCAN: {url} ===", "title")
-        self.log_msg(f"  SQLi: {len(self.wordlist.sql_payloads)} payloads [{sql_src}]", "info")
-        self.log_msg(f"  XSS : {len(self.wordlist.xss_payloads)} payloads [{xss_src}]", "info")
+        self.log_msg(
+            f"  SQLi: {len(self.wordlist.sql_payloads)} payloads [{sql_src}]", "info"
+        )
+        self.log_msg(
+            f"  XSS : {len(self.wordlist.xss_payloads)} payloads [{xss_src}]", "info"
+        )
 
         # Pass the custom payloads to the engine
         engine = ScanEngine(
@@ -1102,12 +1579,17 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             nb = len(results)
             self.status_label.config(
                 text=f"Done - {nb} vuln | {len(detected_cms)} CMS",
-                fg=ACCENT if nb > 0 else TEXT)
+                fg=ACCENT if nb > 0 else TEXT,
+            )
             self.scan_btn.config(state="normal", bg=ACCENT, fg=INK)
             self.html_btn.config(state="normal")
             if self.pdf_btn:
                 self.pdf_btn.config(state="normal")
-            self.log_msg(f"\n=== DONE: {nb} vulnerabilit{'y' if nb == 1 else 'ies'} | {len(detected_cms)} CMS ===", "title")
+            self.log_msg(
+                f"\n=== DONE: {nb} vulnerabilit{'y' if nb == 1 else 'ies'} | {len(detected_cms)} CMS ===",
+                "title",
+            )
+
         self.after(0, _)
 
     def clear_all(self):
@@ -1118,9 +1600,13 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             self.table.delete(item)
         for w in self.cms_frame.winfo_children():
             w.destroy()
-        self.cms_empty_label = tk.Label(self.cms_frame,
+        self.cms_empty_label = tk.Label(
+            self.cms_frame,
             text="Run a scan to detect the target site's CMS.",
-            font=("Courier New", 12), fg=TEXT_DIM, bg=BG)
+            font=("Courier New", 12),
+            fg=TEXT_DIM,
+            bg=BG,
+        )
         self.cms_empty_label.pack(pady=40)
         self.notebook.tab(2, text="CMS Detection")
         self.scan_results = []
@@ -1134,16 +1620,25 @@ FOR AUTHORIZED, ETHICAL USE ONLY
     #  EXPORT
     def _report_filename(self, ext):
         """Safe file name: a host:port netloc would contain ':' (invalid on Windows)."""
-        host = re.sub(r"[^A-Za-z0-9_-]+", "_", urlparse(self.scanned_url).netloc) or "target"
+        host = (
+            re.sub(r"[^A-Za-z0-9_-]+", "_", urlparse(self.scanned_url).netloc)
+            or "target"
+        )
         return f"report_{host}_{datetime.now().strftime('%Y%m%d_%H%M')}.{ext}"
 
     def _wordlist_sources(self):
         """Human-readable description of the wordlists currently loaded."""
         wl = self.wordlist
-        sql = (f"{os.path.basename(wl.sql_file)} ({len(wl.sql_payloads)} payloads)" if wl.sql_file
-               else f"Default ({len(wl.sql_payloads)} payloads)")
-        xss = (f"{os.path.basename(wl.xss_file)} ({len(wl.xss_payloads)} payloads)" if wl.xss_file
-               else f"Default ({len(wl.xss_payloads)} payloads)")
+        sql = (
+            f"{os.path.basename(wl.sql_file)} ({len(wl.sql_payloads)} payloads)"
+            if wl.sql_file
+            else f"Default ({len(wl.sql_payloads)} payloads)"
+        )
+        xss = (
+            f"{os.path.basename(wl.xss_file)} ({len(wl.xss_payloads)} payloads)"
+            if wl.xss_file
+            else f"Default ({len(wl.xss_payloads)} payloads)"
+        )
         return sql, xss
 
     def export_html(self):
@@ -1159,22 +1654,27 @@ FOR AUTHORIZED, ETHICAL USE ONLY
         # (background, text, border) per severity
         sev_style = {
             "Critical": (ACCENT, INK, ACCENT),
-            "High":     (PRIMARY, TEXT, ACCENT),
-            "Medium":   (TEXT_DIM, INK, TEXT_DIM),
-            "Low":      (SURFACE_HI, TEXT_DIM, TEXT_DIM),
+            "High": (PRIMARY, TEXT, ACCENT),
+            "Medium": (TEXT_DIM, INK, TEXT_DIM),
+            "Low": (SURFACE_HI, TEXT_DIM, TEXT_DIM),
         }
 
         def badge(sev):
             bg, fg, bd = sev_style.get(sev, (SURFACE_HI, TEXT_DIM, TEXT_DIM))
-            return (f'<span class="badge" style="background:{bg};color:{fg};'
-                    f'border-color:{bd}">{escape(sev)}</span>')
+            return (
+                f'<span class="badge" style="background:{bg};color:{fg};'
+                f'border-color:{bd}">{escape(sev)}</span>'
+            )
 
         # Everything coming from the scan is escaped: payloads are raw HTML/JS
-        rows = "".join(
-            f'<tr><td>{escape(r["type"])}</td><td>{badge(r["severity"])}</td>'
-            f'<td>{escape(r["description"])}</td><td class="detail">{escape(r["detail"])}</td></tr>'
-            for r in self.scan_results
-        ) or '<tr><td colspan="4" class="empty">No vulnerabilities found</td></tr>'
+        rows = (
+            "".join(
+                f"<tr><td>{escape(r['type'])}</td><td>{badge(r['severity'])}</td>"
+                f'<td>{escape(r["description"])}</td><td class="detail">{escape(r["detail"])}</td></tr>'
+                for r in self.scan_results
+            )
+            or '<tr><td colspan="4" class="empty">No vulnerabilities found</td></tr>'
+        )
 
         tiles = "".join(
             f'<div class="stat" style="background:{sev_style[sev][0]};color:{sev_style[sev][1]};'
@@ -1238,8 +1738,13 @@ footer{{text-align:center;color:{TEXT_DIM};padding:30px;font-size:.8rem}}
         name = self._report_filename("pdf")
         sql_src, xss_src = self.scan_sources
         try:
-            gen = PDFReportGenerator(self.scanned_url, self.scan_results, name,
-                                      sql_source=sql_src, xss_source=xss_src)
+            gen = PDFReportGenerator(
+                self.scanned_url,
+                self.scan_results,
+                name,
+                sql_source=sql_src,
+                xss_source=xss_src,
+            )
             gen.generate()
             self.log_msg(f"PDF report saved: {name}", "ok")
             messagebox.showinfo("PDF generated", f"File: {name}")
@@ -1253,5 +1758,8 @@ footer{{text-align:center;color:{TEXT_DIM};padding:30px;font-size:.8rem}}
 
 #  ENTRY POINT
 if __name__ == "__main__":
+    if not GUI_AVAILABLE:
+        sys.exit("Tkinter is not available. Install it (e.g. sudo pacman -S tk) "
+                 "or use the command-line version: python ethical_scanner_cli.py --help")
     app = ScannerApp()
     app.mainloop()

@@ -6,3 +6,4 @@ venv/
 # Generated at runtime
 report_*.html
 report_*.pdf
+*.tar.xz
