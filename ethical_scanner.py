@@ -264,6 +264,19 @@ CMS_SIGNATURES = {
 # ================================================
 #  SCAN ENGINE (receives the wordlists)
 # ================================================
+def short_error(e):
+    """Turn a long requests/urllib3 exception into a one-line message."""
+    msg = str(e)
+    low = msg.lower()
+    if "ssl" in low or "handshake" in low or "certificate" in low:
+        return "TLS/SSL connection failed (the server may not support HTTPS: try http://)"
+    if "timed out" in low or "timeout" in low:
+        return "Connection timed out"
+    if "max retries" in low or "connection" in low or "name or service" in low:
+        return "Could not connect to the target"
+    return msg[:150]
+
+
 class ScanEngine(threading.Thread):
     """
     Scan engine run in a separate thread.
@@ -300,7 +313,7 @@ class ScanEngine(threading.Thread):
             self.record_vuln("Missing HTTPS", "High", "Site is not encrypted.", "Install Let's Encrypt.")
             self.log("  [!] HTTPS missing", "vuln")
         else:
-            self.log("  [OK] HTTPS", "ok")
+            self.log("  [OK] URL uses HTTPS", "ok")
 
     def test_headers(self):
         self.log("Checking HTTP headers...", "info")
@@ -313,7 +326,7 @@ class ScanEngine(threading.Thread):
                 else:
                     self.log(f"  [OK] {h}", "ok")
         except Exception as e:
-            self.log(f"  Error: {e}", "warn")
+            self.log(f"  Error: {short_error(e)}", "warn")
 
     def test_paths(self):
         self.log("Checking sensitive paths...", "info")
@@ -399,7 +412,7 @@ class ScanEngine(threading.Thread):
                             pass
 
         except Exception as e:
-            self.log(f"  Form scan error: {e}", "warn")
+            self.log(f"  Form scan error: {short_error(e)}", "warn")
 
     def detect_cms(self):
         self.log("Detecting CMS...", "info")
@@ -409,7 +422,7 @@ class ScanEngine(threading.Thread):
             response_headers = response.headers
             response_cookies = {c.name: c.value for c in response.cookies}
         except Exception as e:
-            self.log(f"  CMS detection error: {e}", "warn")
+            self.log(f"  CMS detection error: {short_error(e)}", "warn")
             return
 
         for cms_name, sig in CMS_SIGNATURES.items():
@@ -727,8 +740,8 @@ class ScannerApp(tk.Tk):
         self.table = ttk.Treeview(tab, columns=cols, show="headings")
         for col in cols:
             self.table.heading(col, text=col)
-        self.table.column("Type",        width=220)
-        self.table.column("Severity",    width=100)
+        self.table.column("Type",        width=320)
+        self.table.column("Severity",    width=100, minwidth=100, stretch=False)
         self.table.column("Description", width=380)
         # Hierarchy on the slate panel: filled row > bold emphasis > text > dim
         self.table.tag_configure("Critical", background=ACCENT, foreground=INK,
@@ -738,9 +751,11 @@ class ScannerApp(tk.Tk):
         self.table.tag_configure("Medium", foreground=ON_SURFACE)
         self.table.tag_configure("Low", foreground=ON_SURFACE_DIM)
         sb = ttk.Scrollbar(tab, orient="vertical", command=self.table.yview)
-        self.table.configure(yscrollcommand=sb.set)
-        self.table.pack(side="left", fill="both", expand=True)
+        hsb = ttk.Scrollbar(tab, orient="horizontal", command=self.table.xview)
+        self.table.configure(yscrollcommand=sb.set, xscrollcommand=hsb.set)
+        hsb.pack(side="bottom", fill="x")
         sb.pack(side="right", fill="y")
+        self.table.pack(side="left", fill="both", expand=True)
 
     # -----------------------------------------
     def _tab_wordlists(self):

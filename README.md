@@ -108,6 +108,7 @@ File format:
 │   ├── sqli_samples.txt
 │   ├── sqli_destructive.txt
 │   └── xss_samples.txt
+├── docs/                     # screenshots used in this README
 ├── requirements.txt
 ├── LICENSE
 └── README.md
