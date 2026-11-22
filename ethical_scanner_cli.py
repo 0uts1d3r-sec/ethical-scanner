@@ -31,7 +31,8 @@ DESTRUCTIVE_RE = re.compile(
 ANSI = {"reset": "\033[0m", "bold": "\033[1m", "dim": "\033[2m",
         "red": "\033[31m", "yellow": "\033[33m", "green": "\033[32m",
         "cyan": "\033[36m"}
-LOG_STYLE = {"info": "dim", "ok": "green", "warn": "yellow", "vuln": "red"}
+LOG_STYLE = {"info": "dim", "ok": "green", "warn": "yellow", "vuln": "red",
+             "scan": "cyan", "title": "bold"}
 SEV_STYLE = {"Critical": "red", "High": "red", "Medium": "yellow", "Low": "dim"}
 
 
@@ -44,9 +45,13 @@ class Output:
         self.lock = threading.Lock()
 
     def paint(self, text, *styles):
-        if not self.color or not styles:
+        # Drop any style name ScanEngine might log with that this CLI doesn't
+        # map yet, instead of crashing mid-scan (that used to abort form
+        # testing silently as soon as a page had a <form>).
+        codes = [ANSI[s] for s in styles if s in ANSI]
+        if not self.color or not codes:
             return text
-        return "".join(ANSI[s] for s in styles) + text + ANSI["reset"]
+        return "".join(codes) + text + ANSI["reset"]
 
     def line(self, text="", *styles):
         with self.lock:
