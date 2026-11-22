@@ -307,6 +307,11 @@ CMS_SIGNATURES = {
 
 
 #  SCAN ENGINE (receives the wordlists)
+# A CMS is only reported when at least this many independent signals match
+# (path, header, cookie, HTML pattern): one generic hit such as /admin/ is not enough.
+MIN_CMS_SCORE = 2
+
+
 def short_error(e):
     """Turn a long requests/urllib3 exception into a one-line message."""
     msg = str(e)
@@ -564,7 +569,9 @@ class ScanEngine(threading.Thread):
                     evidence.append(f"HTML: {p[:40]}")
                     break
 
-            if score > 0:
+            if 0 < score < MIN_CMS_SCORE:
+                self.log(f"  (weak {cms_name} signal ignored: needs {MIN_CMS_SCORE} matches)", "info")
+            if score >= MIN_CMS_SCORE:
                 self.detected_cms.append(
                     {
                         "name": cms_name,
@@ -583,8 +590,8 @@ class ScanEngine(threading.Thread):
                     self.record_vuln(
                         f"[{cms_name}] Recommendation",
                         "Medium",
-                        f"CMS {cms_name} detected.",
                         rec,
+                        f"Detected CMS: {cms_name}",
                     )
 
         self.update_cms(self.detected_cms)
