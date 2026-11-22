@@ -1,9 +1,7 @@
 """
-================================================================
         WEB VULNERABILITY SCANNER
         Wordlist loading (SQLi + XSS from .txt files)
         For authorized security testing only!
-================================================================
 """
 
 import requests
@@ -45,11 +43,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 SAMPLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wordlists")
 
 
-# ================================================
 #  THEME
 #  One soft accent (sky blue) on black, with slate-blue panels. Header and borders are
 #  the accent mixed into black; text is a cool off-white, never pure white.
-# ================================================
+
 ACCENT   = "#F8FBFF"   # titles, primary button, highlights
 PRIMARY  = "#1A1B1E"   # header band, table headers, secondary buttons
 TEXT     = "#F8FBFF"   # main text
@@ -68,9 +65,7 @@ ON_SURFACE_DIM = "#8E949C"   # secondary text
 ON_SURFACE_HI  = "#F8FBFF"   # emphasis (findings, titles)
 
 
-# ================================================
 #  DEFAULT PAYLOADS (used when no wordlist is loaded)
-# ================================================
 DEFAULT_SQL_PAYLOADS = [
     "'",
     "' OR '1'='1",
@@ -121,9 +116,7 @@ SECURITY_HEADERS = [
 ]
 
 
-# ================================================
 #  WORDLIST MANAGER
-# ================================================
 class WordlistManager:
     """
     Handles loading, validating and previewing wordlist (.txt)
@@ -217,9 +210,7 @@ class WordlistManager:
         self.xss_file = None
 
 
-# ================================================
 #  CMS KNOWLEDGE BASE
-# ================================================
 CMS_SIGNATURES = {
     "WordPress": {
         "paths": ["/wp-login.php", "/wp-admin/", "/wp-content/"],
@@ -261,9 +252,7 @@ CMS_SIGNATURES = {
 }
 
 
-# ================================================
 #  SCAN ENGINE (receives the wordlists)
-# ================================================
 def short_error(e):
     """Turn a long requests/urllib3 exception into a one-line message."""
     msg = str(e)
@@ -476,9 +465,7 @@ class ScanEngine(threading.Thread):
             self.finish(self.results, self.detected_cms)
 
 
-# ================================================
 #  PDF REPORT GENERATOR
-# ================================================
 class PDFReportGenerator:
     """Builds a PDF report from the scan results using ReportLab."""
 
@@ -596,9 +583,7 @@ class PDFReportGenerator:
         doc.build(elements)
 
 
-# ================================================
 #  GRAPHICAL INTERFACE
-# ================================================
 class ScannerApp(tk.Tk):
 
     def __init__(self):
@@ -614,9 +599,7 @@ class ScannerApp(tk.Tk):
         self.wordlist = WordlistManager()   # Wordlist manager
         self._build_ui()
 
-    # =====================================================
     #  UI CONSTRUCTION
-    # =====================================================
     def _build_ui(self):
 
         # -- Header --
@@ -796,7 +779,7 @@ class ScannerApp(tk.Tk):
 
         tk.Frame(content, bg=BORDER, height=1).pack(fill="x", pady=8)
 
-        # -- XSS section --------------------------------------
+        # -- XSS section
         self._wordlist_section(
             parent=content,
             title="XSS WORDLIST (Cross-Site Scripting)",
@@ -1005,9 +988,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
         z.pack(fill="both", expand=True)
         self._style_scrollbar(z)
 
-    # =============================================
     #  UTILITY METHODS
-    # =============================================
     @staticmethod
     def _style_scrollbar(widget):
         """ScrolledText ships a classic tk scrollbar: recolor it to match the theme."""
@@ -1075,9 +1056,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
                              wraplength=600, justify="left").pack(anchor="w")
         self.after(0, _)
 
-    # =============================================
     #  SCAN
-    # =============================================
     def start_scan(self):
         url = self.url_field.get().strip()
         if not url or url == "https://":
@@ -1152,9 +1131,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
         if self.pdf_btn:
             self.pdf_btn.config(state="disabled")
 
-    # =============================================
     #  EXPORT
-    # =============================================
     def _report_filename(self, ext):
         """Safe file name: a host:port netloc would contain ':' (invalid on Windows)."""
         host = re.sub(r"[^A-Za-z0-9_-]+", "_", urlparse(self.scanned_url).netloc) or "target"
@@ -1274,9 +1251,7 @@ footer{{text-align:center;color:{TEXT_DIM};padding:30px;font-size:.8rem}}
             messagebox.showerror("PDF error", str(e))
 
 
-# ================================================
 #  ENTRY POINT
-# ================================================
 if __name__ == "__main__":
     app = ScannerApp()
     app.mainloop()
