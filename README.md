@@ -1,5 +1,7 @@
 # EthicalScanner
 
+[![Tests](https://github.com/0uts1d3r-sec/ethical-scanner/actions/workflows/tests.yml/badge.svg)](https://github.com/0uts1d3r-sec/ethical-scanner/actions/workflows/tests.yml)
+
 ## Screenshots
 
 | | |
