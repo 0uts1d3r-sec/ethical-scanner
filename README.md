@@ -56,6 +56,10 @@ python ethical_scanner.py
 
 ### Custom wordlists
 
+> **Warning:** `sqli_destructive.txt` contains payloads that can modify or delete
+> data (e.g. DROP/DELETE). Never use it outside a dedicated test environment
+> that you own or are explicitly authorized to test.
+
 Open the **Wordlists** tab:
 
 1. Click **Browse**. The dialog opens in the bundled `wordlists/` folder.
