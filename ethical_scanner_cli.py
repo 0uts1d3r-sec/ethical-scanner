@@ -19,7 +19,7 @@ import requests
 
 import ethical_scanner as core
 
-__version__ = "1.0.0"
+__version__ = "1.1.2"
 
 SEVERITY_ORDER = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
 FAIL_LEVELS = {"low": 1, "medium": 2, "high": 3, "critical": 4}
