@@ -114,6 +114,26 @@ File format:
 └── README.md
 ```
 
+## Command line
+
+A command-line version shares the same engine and does not need Tk:
+
+```bash
+python ethical_scanner_cli.py http://localhost:3000 \
+  --sqli-wordlist wordlists/sqli_samples.txt \
+  --xss-wordlist wordlists/xss_samples.txt \
+  -o report.html
+```
+
+| Option | What it does |
+|---|---|
+| `-o FILE` | Save a report; the format comes from the extension (`.json`, `.html`, `.pdf`, `.txt`) |
+| `--json` | Print the JSON report on stdout (logs go to stderr) |
+| `--fail-on LEVEL` | Exit with code 1 if a finding of that level or higher exists (CI friendly) |
+| `-q`, `--no-color` | Hide the live log / disable colors |
+| `-y`, `--yes` | Confirm that you are authorized to test the target (otherwise you are asked) |
+| `--allow-destructive` | Required to use SQLi payloads that modify or delete data (lab databases only) |
+
 ## How it works
 
 - `WordlistManager`: loads, validates and resets payload lists.
