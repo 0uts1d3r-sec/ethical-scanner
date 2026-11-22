@@ -50,22 +50,22 @@ SAMPLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wordlist
 #  One soft accent (sky blue) on black, with slate-blue panels. Header and borders are
 #  the accent mixed into black; text is a cool off-white, never pure white.
 # ================================================
-ACCENT   = "#66B5FF"   # titles, primary button, highlights
-PRIMARY  = "#1E3F5F"   # header band, table headers, secondary buttons
-TEXT     = "#E6EDF5"   # main text
-TEXT_DIM = "#9FAEC0"   # secondary text
-INK      = "#0A111A"   # status bar, text on the accent button
+ACCENT   = "#FFB454"   # titles, primary button, highlights
+PRIMARY  = "#2B3445"   # header band, table headers, secondary buttons
+TEXT     = "#E8EBF0"   # main text
+TEXT_DIM = "#9AA3B2"   # secondary text
+INK      = "#0D1117"   # status bar, text on the accent button
 
-BG         = "#000000"   # app background
-SURFACE    = "#7D94AA"   # log, tables, previews (mid-tone: needs dark text)
-SURFACE_HI = "#1B2636"   # inputs, cards
-BORDER     = "#2A3A4F"   # separators, outlines
-MUTED      = "#5C6877"   # disabled controls only
+BG         = "#0D1117"   # app background
+SURFACE    = "#161B22"   # log, tables, previews (mid-tone: needs dark text)
+SURFACE_HI = "#1F2630"   # inputs, cards
+BORDER     = "#30363D"   # separators, outlines
+MUTED      = "#6E7681"   # disabled controls only
 
 # Text drawn ON the mid-tone SURFACE (light text would be unreadable there)
-ON_SURFACE     = "#0A111A"   # main text
-ON_SURFACE_DIM = "#1C2B3B"   # secondary text
-ON_SURFACE_HI  = "#08294A"   # emphasis (findings, titles)
+ON_SURFACE     = "#E6EDF3"   # main text
+ON_SURFACE_DIM = "#9AA7B6"   # secondary text
+ON_SURFACE_HI  = "#FFC978"   # emphasis (findings, titles)
 
 
 # ================================================
