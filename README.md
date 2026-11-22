@@ -50,6 +50,8 @@ sudo apt install python3-tk
 
 ReportLab is optional: without it the PDF button is simply hidden and everything else works.
 
+> **Linux note:** use your system Python with Tk (`sudo pacman -S tk` / `sudo apt install python3-tk`). Some prebuilt Python distributions (mise, pyenv, uv) ship a Tk build that renders fonts tiny and pixelated.
+
 ## Usage
 
 ```bash

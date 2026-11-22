@@ -50,22 +50,22 @@ SAMPLES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wordlist
 #  One soft accent (sky blue) on black, with slate-blue panels. Header and borders are
 #  the accent mixed into black; text is a cool off-white, never pure white.
 # ================================================
-ACCENT   = "#FFB454"   # titles, primary button, highlights
-PRIMARY  = "#2B3445"   # header band, table headers, secondary buttons
-TEXT     = "#E8EBF0"   # main text
-TEXT_DIM = "#9AA3B2"   # secondary text
-INK      = "#0D1117"   # status bar, text on the accent button
+ACCENT   = "#F8FBFF"   # titles, primary button, highlights
+PRIMARY  = "#1A1B1E"   # header band, table headers, secondary buttons
+TEXT     = "#F8FBFF"   # main text
+TEXT_DIM = "#9AA0A8"   # secondary text
+INK      = "#0A0A0B"   # status bar, text on the accent button
 
-BG         = "#0D1117"   # app background
-SURFACE    = "#161B22"   # log, tables, previews (mid-tone: needs dark text)
-SURFACE_HI = "#1F2630"   # inputs, cards
-BORDER     = "#30363D"   # separators, outlines
-MUTED      = "#6E7681"   # disabled controls only
+BG         = "#0A0A0B"   # app background
+SURFACE    = "#131416"   # log, tables, previews (mid-tone: needs dark text)
+SURFACE_HI = "#1C1E22"   # inputs, cards
+BORDER     = "#2E3036"   # separators, outlines
+MUTED      = "#5F646B"   # disabled controls only
 
 # Text drawn ON the mid-tone SURFACE (light text would be unreadable there)
-ON_SURFACE     = "#E6EDF3"   # main text
-ON_SURFACE_DIM = "#9AA7B6"   # secondary text
-ON_SURFACE_HI  = "#FFC978"   # emphasis (findings, titles)
+ON_SURFACE     = "#D5DAE0"   # main text
+ON_SURFACE_DIM = "#8E949C"   # secondary text
+ON_SURFACE_HI  = "#F8FBFF"   # emphasis (findings, titles)
 
 
 # ================================================
@@ -591,7 +591,7 @@ class ScannerApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("EthicalScanner")
-        self.geometry("1200x800")
+        self.geometry("1400x900")
         self.configure(bg=BG)
         self.scan_running = False
         self.scan_results = []
@@ -610,28 +610,28 @@ class ScannerApp(tk.Tk):
         header = tk.Frame(self, bg=PRIMARY, pady=10)
         header.pack(fill="x")
         tk.Label(header, text="ETHICAL SCANNER",
-                 font=("Courier New", 18, "bold"), fg=ACCENT, bg=PRIMARY).pack()
+                 font=("Courier New", 20, "bold"), fg=ACCENT, bg=PRIMARY).pack()
         tk.Label(header, text="Web vulnerability scanner  |  For authorized use only",
-                 font=("Courier New", 8), fg=TEXT_DIM, bg=PRIMARY).pack()
+                 font=("Courier New", 10), fg=TEXT_DIM, bg=PRIMARY).pack()
         tk.Frame(self, bg=ACCENT, height=3).pack(fill="x")
 
         # -- URL bar --
         bar = tk.Frame(self, bg=BG, pady=8, padx=16)
         bar.pack(fill="x")
-        tk.Label(bar, text="URL:", font=("Courier New", 10, "bold"),
+        tk.Label(bar, text="URL:", font=("Courier New", 12, "bold"),
                  fg=ACCENT, bg=BG).pack(side="left", padx=(0, 8))
-        self.url_field = tk.Entry(bar, font=("Courier New", 11),
+        self.url_field = tk.Entry(bar, font=("Courier New", 13),
             bg=SURFACE_HI, fg=TEXT, insertbackground=ACCENT,
             relief="flat", bd=0, highlightthickness=1,
             highlightbackground=BORDER, highlightcolor=ACCENT)
         self.url_field.pack(side="left", fill="x", expand=True, ipady=5, padx=(0, 10))
         self.url_field.insert(0, "https://")
         self.scan_btn = tk.Button(bar, text="  >  FULL SCAN  ",
-            font=("Courier New", 10, "bold"), bg=ACCENT, fg=INK,
+            font=("Courier New", 12, "bold"), bg=ACCENT, fg=INK,
             activebackground=TEXT, activeforeground=INK, disabledforeground=MUTED,
             relief="flat", cursor="hand2", command=self.start_scan)
         self.scan_btn.pack(side="left")
-        tk.Button(bar, text="  X  ", font=("Courier New", 10),
+        tk.Button(bar, text="  X  ", font=("Courier New", 12),
             bg=PRIMARY, fg=TEXT, relief="flat",
             cursor="hand2", command=self.clear_all).pack(side="left", padx=5)
 
@@ -640,13 +640,13 @@ class ScannerApp(tk.Tk):
         body.pack(fill="both", expand=True, padx=16, pady=(0, 8))
 
         # Left column: LOG
-        col_left = tk.Frame(body, bg=BG, width=320)
+        col_left = tk.Frame(body, bg=BG, width=380)
         col_left.pack(side="left", fill="both", padx=(0, 8))
         col_left.pack_propagate(False)
         tk.Label(col_left, text="LIVE LOG",
-                 font=("Courier New", 8, "bold"), fg=TEXT_DIM,
+                 font=("Courier New", 10, "bold"), fg=TEXT_DIM,
                  bg=BG).pack(anchor="w", pady=(0, 3))
-        self.log_area = scrolledtext.ScrolledText(col_left, font=("Courier New", 8),
+        self.log_area = scrolledtext.ScrolledText(col_left, font=("Courier New", 10),
             bg=SURFACE, fg=ON_SURFACE, insertbackground=ON_SURFACE_HI,
             relief="flat", bd=0, state="disabled", wrap="word", padx=8, pady=6)
         self.log_area.pack(fill="both", expand=True)
@@ -654,7 +654,7 @@ class ScannerApp(tk.Tk):
         for t, c in [("info", ON_SURFACE_DIM), ("ok", ON_SURFACE), ("vuln", ON_SURFACE_HI),
                      ("warn", ON_SURFACE_HI), ("scan", ON_SURFACE_DIM), ("title", ON_SURFACE_HI)]:
             self.log_area.tag_config(t, foreground=c,
-                font=("Courier New", 8, "bold") if t in ("title", "vuln") else ("Courier New", 8))
+                font=("Courier New", 10, "bold") if t in ("title", "vuln") else ("Courier New", 10))
 
         # Right column: TABS
         col_right = tk.Frame(body, bg=BG)
@@ -664,15 +664,15 @@ class ScannerApp(tk.Tk):
         style.configure("TNotebook", background=BG, borderwidth=0,
             bordercolor=BORDER, lightcolor=BG, darkcolor=BG)
         style.configure("TNotebook.Tab", background=SURFACE_HI, foreground=TEXT_DIM,
-            font=("Courier New", 8, "bold"), padding=[10, 5], borderwidth=1,
+            font=("Courier New", 10, "bold"), padding=[10, 5], borderwidth=1,
             bordercolor=BORDER, lightcolor=SURFACE_HI, darkcolor=SURFACE_HI)
         style.map("TNotebook.Tab", background=[("selected", PRIMARY)],
             foreground=[("selected", ACCENT)])
         style.configure("Treeview", background=SURFACE, foreground=ON_SURFACE,
-            fieldbackground=SURFACE, rowheight=24, font=("Courier New", 8), borderwidth=0,
+            fieldbackground=SURFACE, rowheight=30, font=("Courier New", 10), borderwidth=0,
             bordercolor=BORDER, lightcolor=SURFACE, darkcolor=SURFACE)
         style.configure("Treeview.Heading", background=PRIMARY, foreground=TEXT,
-            font=("Courier New", 8, "bold"), borderwidth=0)
+            font=("Courier New", 10, "bold"), borderwidth=0)
         style.map("Treeview", background=[("selected", PRIMARY)],
             foreground=[("selected", TEXT)])
         style.configure("TProgressbar", troughcolor=SURFACE_HI, background=ACCENT,
@@ -696,23 +696,23 @@ class ScannerApp(tk.Tk):
         bottom = tk.Frame(self, bg=INK, pady=5, padx=16)
         bottom.pack(fill="x", side="bottom")
         self.status_label = tk.Label(bottom, text="Ready",
-            font=("Courier New", 8), fg=TEXT, bg=INK)
+            font=("Courier New", 10), fg=TEXT, bg=INK)
         self.status_label.pack(side="left")
         self.progress = ttk.Progressbar(bottom, mode="indeterminate", length=140)
         self.progress.pack(side="left", padx=12)
         self.count_label = tk.Label(bottom, text="0 vuln",
-            font=("Courier New", 8, "bold"), fg=TEXT_DIM, bg=INK)
+            font=("Courier New", 10, "bold"), fg=TEXT_DIM, bg=INK)
         self.count_label.pack(side="left")
         self.wordlist_status_label = tk.Label(bottom,
             text=f"SQLi: {len(self.wordlist.sql_payloads)} default | XSS: {len(self.wordlist.xss_payloads)} default",
-            font=("Courier New", 7), fg=TEXT_DIM, bg=INK)
+            font=("Courier New", 9), fg=TEXT_DIM, bg=INK)
         self.wordlist_status_label.pack(side="left", padx=12)
-        self.html_btn = tk.Button(bottom, text="HTML", font=("Courier New", 8),
+        self.html_btn = tk.Button(bottom, text="HTML", font=("Courier New", 10),
             bg=PRIMARY, fg=TEXT, disabledforeground=MUTED, relief="flat", cursor="hand2",
             state="disabled", command=self.export_html)
         self.html_btn.pack(side="right", padx=3)
         if PDF_AVAILABLE:
-            self.pdf_btn = tk.Button(bottom, text="PDF", font=("Courier New", 8, "bold"),
+            self.pdf_btn = tk.Button(bottom, text="PDF", font=("Courier New", 10, "bold"),
                 bg=PRIMARY, fg=TEXT, disabledforeground=MUTED, relief="flat", cursor="hand2",
                 state="disabled", command=self.export_pdf)
             self.pdf_btn.pack(side="right", padx=3)
@@ -727,14 +727,14 @@ class ScannerApp(tk.Tk):
         self.table = ttk.Treeview(tab, columns=cols, show="headings")
         for col in cols:
             self.table.heading(col, text=col)
-        self.table.column("Type",        width=190)
-        self.table.column("Severity",    width=80)
-        self.table.column("Description", width=320)
+        self.table.column("Type",        width=220)
+        self.table.column("Severity",    width=100)
+        self.table.column("Description", width=380)
         # Hierarchy on the slate panel: filled row > bold emphasis > text > dim
         self.table.tag_configure("Critical", background=ACCENT, foreground=INK,
-            font=("Courier New", 8, "bold"))
+            font=("Courier New", 10, "bold"))
         self.table.tag_configure("High", foreground=ON_SURFACE_HI,
-            font=("Courier New", 8, "bold"))
+            font=("Courier New", 10, "bold"))
         self.table.tag_configure("Medium", foreground=ON_SURFACE)
         self.table.tag_configure("Low", foreground=ON_SURFACE_DIM)
         sb = ttk.Scrollbar(tab, orient="vertical", command=self.table.yview)
@@ -755,14 +755,14 @@ class ScannerApp(tk.Tk):
         title_frame = tk.Frame(tab, bg=BG, pady=10, padx=14)
         title_frame.pack(fill="x")
         tk.Label(title_frame, text="PAYLOAD WORDLIST MANAGEMENT",
-                 font=("Courier New", 11, "bold"), fg=ACCENT, bg=BG).pack(anchor="w")
+                 font=("Courier New", 13, "bold"), fg=ACCENT, bg=BG).pack(anchor="w")
         tk.Label(title_frame,
                  text="Load your own .txt payload files for SQLi and XSS (one entry per line, # = comment)",
-                 font=("Courier New", 8), fg=TEXT_DIM, bg=BG).pack(anchor="w", pady=(2, 0))
+                 font=("Courier New", 10), fg=TEXT_DIM, bg=BG).pack(anchor="w", pady=(2, 0))
 
         tk.Label(title_frame,
                  text="Sample wordlists are in the 'wordlists/' folder next to this script",
-                 font=("Courier New", 8), fg=TEXT, bg=BG).pack(anchor="w", pady=(2, 0))
+                 font=("Courier New", 10), fg=TEXT, bg=BG).pack(anchor="w", pady=(2, 0))
 
         sep = tk.Frame(tab, bg=BORDER, height=1)
         sep.pack(fill="x", padx=14, pady=4)
@@ -801,7 +801,7 @@ class ScannerApp(tk.Tk):
         frame.pack(fill="both", expand=True)
 
         # Section title
-        tk.Label(frame, text=title, font=("Courier New", 10, "bold"),
+        tk.Label(frame, text=title, font=("Courier New", 12, "bold"),
                  fg=color, bg=BG).pack(anchor="w", pady=(4, 6))
 
         # Row: file field + buttons
@@ -809,7 +809,7 @@ class ScannerApp(tk.Tk):
         file_row.pack(fill="x", pady=(0, 6))
 
         # File path field
-        field = tk.Entry(file_row, font=("Courier New", 9),
+        field = tk.Entry(file_row, font=("Courier New", 11),
             bg=SURFACE_HI, fg=TEXT_DIM, insertbackground=ACCENT,
             relief="flat", bd=0, highlightthickness=1,
             highlightbackground=BORDER, highlightcolor=color,
@@ -830,13 +830,13 @@ class ScannerApp(tk.Tk):
                 field.config(fg=TEXT)
 
         tk.Button(file_row, text="Browse",
-            font=("Courier New", 8), bg=PRIMARY, fg=TEXT,
+            font=("Courier New", 10), bg=PRIMARY, fg=TEXT,
             relief="flat", cursor="hand2", command=browse).pack(side="left", padx=(0, 4))
 
         # Counter label (dynamic)
         count_label = tk.Label(file_row,
             text=f"{len(self.wordlist.sql_payloads if payload_type=='sql' else self.wordlist.xss_payloads)} payloads",
-            font=("Courier New", 8, "bold"), fg=color, bg=BG, width=12)
+            font=("Courier New", 10, "bold"), fg=color, bg=BG, width=12)
         count_label.pack(side="left", padx=(0, 4))
 
         # Payload preview area
@@ -844,11 +844,11 @@ class ScannerApp(tk.Tk):
         preview_frame.pack(fill="both", expand=True, pady=(0, 4))
 
         tk.Label(preview_frame, text="Active payload preview:",
-                 font=("Courier New", 7, "bold"), fg=ON_SURFACE_DIM,
+                 font=("Courier New", 9, "bold"), fg=ON_SURFACE_DIM,
                  bg=SURFACE).pack(anchor="w", padx=8, pady=(4, 0))
 
         preview_area = scrolledtext.ScrolledText(preview_frame,
-            font=("Courier New", 8), bg=SURFACE,
+            font=("Courier New", 10), bg=SURFACE,
             fg=ON_SURFACE_HI if payload_type == "sql" else ON_SURFACE,
             relief="flat", bd=0, height=6, state="normal",
             padx=8, pady=4, wrap="none")
@@ -915,31 +915,31 @@ class ScannerApp(tk.Tk):
             self.log_msg(f"Wordlist {payload_type.upper()} reset to defaults", "info")
 
         tk.Button(btn_row, text="LOAD THIS WORDLIST",
-            font=("Courier New", 9, "bold"), bg=ACCENT,
+            font=("Courier New", 11, "bold"), bg=ACCENT,
             fg=INK, relief="flat", cursor="hand2", command=load).pack(side="left", padx=(0, 8))
 
         tk.Button(btn_row, text="Reset to default",
-            font=("Courier New", 8), bg=SURFACE_HI, fg=TEXT_DIM,
+            font=("Courier New", 10), bg=SURFACE_HI, fg=TEXT_DIM,
             relief="flat", cursor="hand2", command=reset).pack(side="left")
 
         # Format info label
         tk.Label(btn_row,
             text="  .txt format: one entry per line, # for comments",
-            font=("Courier New", 7), fg=TEXT_DIM, bg=BG).pack(side="left", padx=12)
+            font=("Courier New", 9), fg=TEXT_DIM, bg=BG).pack(side="left", padx=12)
 
     # -----------------------------------------
     def _tab_cms(self):
         tab_cms = tk.Frame(self.notebook, bg=BG, padx=14, pady=14)
         self.notebook.add(tab_cms, text="CMS Detection")
         tk.Label(tab_cms, text="AUTOMATIC CMS DETECTION",
-                 font=("Courier New", 11, "bold"), fg=ACCENT, bg=BG).pack(anchor="w")
+                 font=("Courier New", 13, "bold"), fg=ACCENT, bg=BG).pack(anchor="w")
         tk.Label(tab_cms, text="WordPress, Joomla, Drupal, Magento, Laravel...",
-                 font=("Courier New", 8), fg=TEXT_DIM, bg=BG).pack(anchor="w", pady=(2, 10))
+                 font=("Courier New", 10), fg=TEXT_DIM, bg=BG).pack(anchor="w", pady=(2, 10))
         self.cms_frame = tk.Frame(tab_cms, bg=BG)
         self.cms_frame.pack(fill="both", expand=True)
         self.cms_empty_label = tk.Label(self.cms_frame,
             text="Run a scan to detect the target site's CMS.",
-            font=("Courier New", 10), fg=TEXT_DIM, bg=BG)
+            font=("Courier New", 12), fg=TEXT_DIM, bg=BG)
         self.cms_empty_label.pack(pady=40)
 
     # -----------------------------------------
@@ -983,7 +983,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
     Only test sites you own or for which
     you have explicit written authorization.
 """
-        z = scrolledtext.ScrolledText(tab_help, font=("Courier New", 9),
+        z = scrolledtext.ScrolledText(tab_help, font=("Courier New", 11),
             bg=SURFACE, fg=ON_SURFACE, relief="flat", bd=0, padx=10, pady=10)
         z.insert("end", help_text)
         z.config(state="disabled")
@@ -1039,7 +1039,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             if not detected_cms:
                 tk.Label(self.cms_frame,
                     text="No known CMS detected",
-                    font=("Courier New", 10), fg=TEXT, bg=BG).pack(pady=30)
+                    font=("Courier New", 12), fg=TEXT, bg=BG).pack(pady=30)
                 return
             self.notebook.tab(2, text=f"CMS ({len(detected_cms)})")
             for cms in detected_cms:
@@ -1048,16 +1048,16 @@ FOR AUTHORIZED, ETHICAL USE ONLY
                 l1 = tk.Frame(card, bg=SURFACE_HI)
                 l1.pack(fill="x")
                 tk.Label(l1, text=f"{cms['icon']} {cms['name']}",
-                         font=("Courier New", 12, "bold"), fg=ACCENT, bg=SURFACE_HI).pack(side="left")
+                         font=("Courier New", 14, "bold"), fg=ACCENT, bg=SURFACE_HI).pack(side="left")
                 tk.Label(l1, text=f"  confidence {cms['confidence']}%",
-                         font=("Courier New", 8), fg=TEXT, bg=SURFACE_HI).pack(side="left")
+                         font=("Courier New", 10), fg=TEXT, bg=SURFACE_HI).pack(side="left")
                 for p in cms["evidence"]:
                     tk.Label(card, text=f"  -> {p}",
-                             font=("Courier New", 8), fg=TEXT, bg=SURFACE_HI).pack(anchor="w")
+                             font=("Courier New", 10), fg=TEXT, bg=SURFACE_HI).pack(anchor="w")
                 for r in cms["known_vulns"]:
                     tk.Label(card, text=f"  ! {r}",
-                             font=("Courier New", 8), fg=ACCENT, bg=SURFACE_HI,
-                             wraplength=500, justify="left").pack(anchor="w")
+                             font=("Courier New", 10), fg=ACCENT, bg=SURFACE_HI,
+                             wraplength=600, justify="left").pack(anchor="w")
         self.after(0, _)
 
     # =============================================
@@ -1126,7 +1126,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             w.destroy()
         self.cms_empty_label = tk.Label(self.cms_frame,
             text="Run a scan to detect the target site's CMS.",
-            font=("Courier New", 10), fg=TEXT_DIM, bg=BG)
+            font=("Courier New", 12), fg=TEXT_DIM, bg=BG)
         self.cms_empty_label.pack(pady=40)
         self.notebook.tab(2, text="CMS Detection")
         self.scan_results = []
