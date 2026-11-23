@@ -8,3 +8,5 @@ report_*.html
 report_*.pdf
 *.tar.xz
 *.tar.gz
+scope.txt
+scope-*.txt

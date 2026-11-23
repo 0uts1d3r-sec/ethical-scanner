@@ -1,6 +1,0 @@
-# Allowed targets, one per line. Copy this file to scope.txt and edit it.
-# Use it with:  python ethical_scanner_cli.py https://app.example.com --scope-file scope.txt
-
-127.0.0.1            # this host only
-*.example.com          # subdomains only (the apex above must be listed separately)
-10.0.0.0/24            # an IP range
