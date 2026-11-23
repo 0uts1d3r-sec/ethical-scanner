@@ -29,7 +29,7 @@ A desktop web vulnerability scanner with a dark GUI, built with Python and Tkint
 
 ## Installation
 
-Requires **Python 3.8+** and Tkinter.
+Requires **Python 3.10+**. Tkinter is only needed for the GUI; the command-line version works without it.
 
 ```bash
 git clone https://github.com/0uts1d3r-sec/ethical-scanner.git
@@ -105,13 +105,18 @@ File format:
 
 ```text
 .
-├── ethical_scanner.py        # application (engine + GUI + report generators)
+├── ethical_scanner.py        # engine, Tk GUI and report generators
+├── ethical_scanner_cli.py    # command-line version (same engine, no Tk needed)
+├── scope.example.txt         # example scope file for --scope-file
 ├── wordlists/
 │   ├── sqli_samples.txt
 │   ├── sqli_destructive.txt
 │   └── xss_samples.txt
+├── tests/                    # pytest suite (no internet access needed)
 ├── docs/                     # screenshots used in this README
+├── .github/workflows/        # CI: tests on Python 3.10, 3.12 and 3.14
 ├── requirements.txt
+├── SECURITY.md
 ├── LICENSE
 └── README.md
 ```
@@ -143,15 +148,15 @@ python ethical_scanner_cli.py http://localhost:3000 \
 
 One entry per line, comments start with `#` (see `scope.example.txt`):
 
-`````text
+```text
 example.com        # this host only
 *.example.com      # subdomains only: list the apex separately
 10.0.0.0/24        # IP range
-`````
+```
 
-`````bash
+```bash
 python ethical_scanner_cli.py https://app.example.com --scope-file scope.txt --delay 1 --timeout 10
-````
+```
 
 ## How it works
 
@@ -159,6 +164,8 @@ python ethical_scanner_cli.py https://app.example.com --scope-file scope.txt --d
 - `ScanEngine`: runs the checks in a background thread so the UI stays responsive, and reports through callbacks.
 - `ScannerApp`: the Tkinter interface.
 - `PDFReportGenerator`: builds the PDF report.
+- `ethical_scanner_cli.py`: the command-line front end, built on the same engine.
+- `RequestPolicy` (CLI): wraps every HTTP request, redirects included, to apply the scope file, `--delay` and `--timeout`.
 
 The scan order is: HTTPS, headers, paths, forms, CMS. For each form field, payloads are tried one at a time and testing stops at the first hit per form and per vulnerability type.
 
@@ -172,6 +179,7 @@ This is a lightweight first-pass tool, not a replacement for Burp Suite, ZAP or 
 - Path checks treat any `200` as exposed, so sites with soft-404 pages can produce false positives.
 - Requests are sequential and TLS certificate verification is disabled (`verify=False`), so self-signed targets work but certificate problems are not reported.
 - No authentication or session handling.
+- The request delay and the scope file are available in the command-line version only.
 
 Treat every finding as a lead to verify, not as proof.
 
@@ -179,8 +187,17 @@ Treat every finding as a lead to verify, not as proof.
 
 - Crawl same-origin links and test the forms found
 - Time-based and boolean SQLi detection
-- Configurable request delay, threads and scope limits
+- Request delay and scope limits in the GUI (already available in the CLI), and threads
 - JSON / SARIF export for CI pipelines
+
+## Development
+
+```bash
+pip install pytest
+python -m pytest -q
+```
+
+The tests only talk to a local server, so they need no internet access. They also run in CI on every push.
 
 ## License
 
