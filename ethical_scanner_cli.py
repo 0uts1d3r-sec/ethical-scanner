@@ -6,14 +6,12 @@ For authorized security testing only.
 """
 
 import argparse
-import ipaddress
 import json
 import math
 import os
 import re
 import sys
 import threading
-import time
 from datetime import datetime
 from html import escape
 from urllib.parse import urlparse
@@ -22,7 +20,7 @@ import requests
 
 import ethical_scanner as core
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 SEVERITY_ORDER = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
 FAIL_LEVELS = {"low": 1, "medium": 2, "high": 3, "critical": 4}
@@ -62,105 +60,11 @@ class Output:
 
 
 
-class OutOfScope(requests.exceptions.RequestException):
-    """Raised when a request would leave the allowed scope."""
-
-
-class Scope:
-    """Allowed targets read from a text file, one entry per line:
-    a host (example.com), subdomains only (*.example.com), an IP or a CIDR range."""
-
-    def __init__(self, lines, source="scope"):
-        self.source = source
-        self.hosts, self.suffixes, self.networks = set(), [], []
-        for raw in lines:
-            entry = raw.split("#", 1)[0].strip().lower()
-            if not entry:
-                continue
-            if "://" in entry:                       # tolerate a pasted URL
-                entry = urlparse(entry).hostname or ""
-            if entry.startswith("*."):
-                self.suffixes.append(entry[1:])      # ".example.com"
-                continue
-            try:
-                self.networks.append(ipaddress.ip_network(entry, strict=False))
-            except ValueError:
-                if ":" in entry:                     # drop a port: host:8443
-                    entry = entry.rsplit(":", 1)[0]
-                if entry:
-                    self.hosts.add(entry.rstrip("."))
-        if not (self.hosts or self.suffixes or self.networks):
-            raise ValueError("the scope file has no entries")
-
-    @classmethod
-    def from_file(cls, path):
-        with open(path, encoding="utf-8") as f:
-            return cls(f.read().splitlines(), os.path.basename(path))
-
-    def allows(self, host):
-        host = (host or "").lower().rstrip(".")
-        if not host:
-            return False
-        if host in self.hosts or any(host.endswith(s) for s in self.suffixes):
-            return True
-        try:
-            address = ipaddress.ip_address(host)
-        except ValueError:
-            return False
-        return any(address in network for network in self.networks)
-
-
-class RequestPolicy:
-    """While active, every HTTP request (redirect hops included) passes through
-    Session.send: it enforces the scope, waits `delay` seconds between requests and
-    applies a fixed timeout. The scan engine itself needs no change."""
-
-    def __init__(self, scope=None, delay=0.0, timeout=None):
-        self.scope, self.delay, self.timeout = scope, delay, timeout
-        self.sent = 0
-        self.blocked = []
-        self.stopped = False
-        self._last = None
-        self._lock = threading.Lock()
-        self._original = None
-
-    def __enter__(self):
-        policy = self
-        self._original = original = requests.sessions.Session.send
-
-        def send(session, request, **kwargs):
-            policy._before(request.url)
-            if policy.timeout is not None:
-                kwargs["timeout"] = policy.timeout
-            return original(session, request, **kwargs)
-
-        requests.sessions.Session.send = send
-        return self
-
-    def __exit__(self, *exc):
-        requests.sessions.Session.send = self._original
-        return False
-
-    def stop(self):
-        """Refuse every further request (used after Ctrl+C)."""
-        self.stopped = True
-
-    def _before(self, url):
-        host = urlparse(url).hostname
-        with self._lock:
-            if self.stopped:
-                raise requests.exceptions.RequestException("Scan stopped")
-            if self.scope and not self.scope.allows(host):
-                label = host or "(no host)"
-                if label not in self.blocked:
-                    self.blocked.append(label)
-                raise OutOfScope(f"Blocked: {label} is not in the scope file")
-            if self._last is not None:
-                pause = self.delay - (time.monotonic() - self._last)
-                if pause > 0:
-                    time.sleep(pause)
-            self._last = time.monotonic()
-            self.sent += 1
+# The scope file and the request policy live in the engine module, so that the GUI
+# uses exactly the same code; the names stay available here.
+OutOfScope = core.OutOfScope
+Scope = core.Scope
+RequestPolicy = core.RequestPolicy
 
 
 def _number(minimum, strict):

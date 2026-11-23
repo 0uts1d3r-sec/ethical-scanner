@@ -5,6 +5,9 @@ For authorized security testing only!
 """
 
 import requests
+import time
+import math
+import ipaddress
 import sys
 import threading
 import re
@@ -310,6 +313,153 @@ CMS_SIGNATURES = {
 # A CMS is only reported when at least this many independent signals match
 # (path, header, cookie, HTML pattern): one generic hit such as /admin/ is not enough.
 MIN_CMS_SCORE = 2
+
+
+class OutOfScope(requests.exceptions.RequestException):
+    """Raised when a request would leave the allowed scope."""
+
+
+class Scope:
+    """Allowed targets read from a text file, one entry per line:
+    a host (example.com), subdomains only (*.example.com), an IP or a CIDR range."""
+
+    def __init__(self, lines, source="scope"):
+        self.source = source
+        self.hosts, self.suffixes, self.networks = set(), [], []
+        for raw in lines:
+            entry = raw.split("#", 1)[0].strip().lower()
+            if not entry:
+                continue
+            if "://" in entry:  # tolerate a pasted URL
+                entry = urlparse(entry).hostname or ""
+            if entry.startswith("*."):
+                self.suffixes.append(entry[1:])  # ".example.com"
+                continue
+            try:
+                self.networks.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError:
+                if ":" in entry:  # drop a port: host:8443
+                    entry = entry.rsplit(":", 1)[0]
+                if entry:
+                    self.hosts.add(entry.rstrip("."))
+        if not (self.hosts or self.suffixes or self.networks):
+            raise ValueError("the scope file has no entries")
+
+    @classmethod
+    def from_file(cls, path):
+        with open(path, encoding="utf-8") as f:
+            return cls(f.read().splitlines(), os.path.basename(path))
+
+    def allows(self, host):
+        host = (host or "").lower().rstrip(".")
+        if not host:
+            return False
+        if host in self.hosts or any(host.endswith(s) for s in self.suffixes):
+            return True
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return False
+        return any(address in network for network in self.networks)
+
+
+class RequestPolicy:
+    """While active, every HTTP request (redirect hops included) passes through
+    Session.send: it enforces the scope, waits `delay` seconds between requests and
+    applies a fixed timeout. The scan engine itself needs no change.
+
+    Use it as a context manager, or call activate() / deactivate() yourself."""
+
+    def __init__(self, scope=None, delay=0.0, timeout=None):
+        self.scope, self.delay, self.timeout = scope, delay, timeout
+        self.sent = 0
+        self.blocked = []
+        self.stopped = False
+        self._last = None
+        self._lock = threading.Lock()
+        self._original = None
+
+    def activate(self):
+        if self._original is not None:
+            return self
+        policy = self
+        self._original = original = requests.sessions.Session.send
+
+        def send(session, request, **kwargs):
+            policy._before(request.url)
+            if policy.timeout is not None:
+                kwargs["timeout"] = policy.timeout
+            return original(session, request, **kwargs)
+
+        requests.sessions.Session.send = send
+        return self
+
+    def deactivate(self):
+        if self._original is not None:
+            requests.sessions.Session.send = self._original
+            self._original = None
+
+    def __enter__(self):
+        return self.activate()
+
+    def __exit__(self, *exc):
+        self.deactivate()
+        return False
+
+    def stop(self):
+        """Refuse every further request (used after Ctrl+C)."""
+        self.stopped = True
+
+    def _before(self, url):
+        host = urlparse(url).hostname
+        with self._lock:
+            if self.stopped:
+                raise requests.exceptions.RequestException("Scan stopped")
+            if self.scope and not self.scope.allows(host):
+                label = host or "(no host)"
+                if label not in self.blocked:
+                    self.blocked.append(label)
+                raise OutOfScope(f"Blocked: {label} is not in the scope file")
+            if self._last is not None:
+                pause = self.delay - (time.monotonic() - self._last)
+                if pause > 0:
+                    time.sleep(pause)
+            self._last = time.monotonic()
+            self.sent += 1
+
+
+def build_request_policy(url, scope_path=None, delay_text="", timeout_text=""):
+    """Check the limits typed in the GUI.
+    Returns (policy, None) when they are valid, or (None, error message)."""
+
+    def number(text, name, strict):
+        text = (text or "").strip().replace(",", ".")  # accept 0,5 as well as 0.5
+        if not text:
+            return None, None
+        try:
+            value = float(text)
+        except ValueError:
+            return None, f"{name} must be a number of seconds."
+        if not math.isfinite(value) or (value <= 0 if strict else value < 0):
+            return None, f"{name} must be {'greater than 0' if strict else '0 or more'}."
+        return value, None
+
+    delay, error = number(delay_text, "Delay", strict=False)
+    if error:
+        return None, error
+    timeout, error = number(timeout_text, "Timeout", strict=True)
+    if error:
+        return None, error
+    scope = None
+    if scope_path:
+        try:
+            scope = Scope.from_file(scope_path)
+        except (OSError, ValueError) as e:
+            return None, f"Scope file error: {e}"
+        host = urlparse(url).hostname
+        if not scope.allows(host):
+            return None, f"Target {host} is not in the scope file ({scope.source})."
+    return RequestPolicy(scope, delay or 0.0, timeout), None
 
 
 def short_error(e):
@@ -783,6 +933,8 @@ class ScannerApp(tk.Tk if GUI_AVAILABLE else object):
         self.scanned_url = ""
         self.scan_sources = ("Default", "Default")
         self.wordlist = WordlistManager()  # Wordlist manager
+        self.scope_path = None
+        self.policy = None
         self._build_ui()
 
     #  UI CONSTRUCTION
@@ -851,6 +1003,9 @@ class ScannerApp(tk.Tk if GUI_AVAILABLE else object):
             cursor="hand2",
             command=self.clear_all,
         ).pack(side="left", padx=5)
+
+        self._build_limits_bar()
+
 
         # -- Body --
         body = tk.Frame(self, bg=BG)
@@ -1030,6 +1185,96 @@ class ScannerApp(tk.Tk if GUI_AVAILABLE else object):
             self.pdf_btn.pack(side="right", padx=3)
         else:
             self.pdf_btn = None
+
+    def _build_limits_bar(self):
+        """Second row under the URL bar: request delay, timeout and scope file."""
+        bar = tk.Frame(self, bg=BG, padx=16)
+        bar.pack(fill="x", pady=(0, 6))
+        label_font = ("Courier New", 10, "bold")
+        entry_style = dict(
+            font=("Courier New", 11),
+            width=6,
+            justify="center",
+            bg=SURFACE_HI,
+            fg=TEXT,
+            insertbackground=ACCENT,
+            relief="flat",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            highlightcolor=ACCENT,
+        )
+        button_style = dict(
+            font=("Courier New", 10),
+            bg=PRIMARY,
+            fg=TEXT,
+            activebackground=BORDER,
+            activeforeground=TEXT,
+            relief="flat",
+            cursor="hand2",
+        )
+        tk.Label(bar, text="DELAY (s):", font=label_font, fg=TEXT_DIM, bg=BG).pack(
+            side="left", padx=(0, 6)
+        )
+        self.delay_entry = tk.Entry(bar, **entry_style)
+        self.delay_entry.insert(0, "0")
+        self.delay_entry.pack(side="left", ipady=3)
+        tk.Label(bar, text="TIMEOUT (s):", font=label_font, fg=TEXT_DIM, bg=BG).pack(
+            side="left", padx=(16, 6)
+        )
+        self.timeout_entry = tk.Entry(bar, **entry_style)
+        self.timeout_entry.pack(side="left", ipady=3)
+        tk.Label(bar, text="SCOPE:", font=label_font, fg=TEXT_DIM, bg=BG).pack(
+            side="left", padx=(16, 6)
+        )
+        self.scope_label = tk.Label(
+            bar,
+            text="none (any target)",
+            font=("Courier New", 10),
+            fg=TEXT_DIM,
+            bg=BG,
+        )
+        self.scope_label.pack(side="left")
+        tk.Button(bar, text=" Browse ", command=self._pick_scope, **button_style).pack(
+            side="left", padx=(10, 4)
+        )
+        tk.Button(bar, text=" Clear ", command=self._clear_scope, **button_style).pack(
+            side="left"
+        )
+
+    def _pick_scope(self):
+        path = filedialog.askopenfilename(
+            title="Choose a scope file",
+            initialdir=os.getcwd(),
+            filetypes=[("Text files", "*.txt"), ("All files", "*")],
+        )
+        if path:
+            self.scope_path = path
+            self.scope_label.config(text=os.path.basename(path), fg=ACCENT)
+
+    def _clear_scope(self):
+        self.scope_path = None
+        self.scope_label.config(text="none (any target)", fg=TEXT_DIM)
+
+    def _log_limits(self, policy):
+        if policy.scope:
+            self.log_msg(f"  Scope: {policy.scope.source}", "info")
+        if policy.delay:
+            self.log_msg(f"  Delay: {policy.delay:g} s between requests", "info")
+        if policy.timeout:
+            self.log_msg(f"  Timeout: {policy.timeout:g} s per request", "info")
+
+    def _end_policy(self):
+        """Remove the request limits once the scan is over and report what they did."""
+        policy, self.policy = self.policy, None
+        if policy is None:
+            return
+        policy.deactivate()
+        self.log_msg(f"  Requests sent: {policy.sent}", "info")
+        if policy.blocked:
+            self.log_msg(
+                "  Blocked out-of-scope host(s): " + ", ".join(policy.blocked), "warn"
+            )
 
     # -----------------------------------------
     def _tab_vulnerabilities(self):
@@ -1538,6 +1783,12 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             return
         if not url.startswith(("http://", "https://")):
             url = "https://" + url
+        policy, error = build_request_policy(
+            url, self.scope_path, self.delay_entry.get(), self.timeout_entry.get()
+        )
+        if error:
+            messagebox.showwarning("Scan limits", error)
+            return
         self.clear_all()
         self.scanned_url = url
         self.scan_running = True
@@ -1575,10 +1826,18 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             cms_callback=self.update_cms_ui,
             done_callback=self.scan_done,
         )
-        engine.start()
+        self._log_limits(policy)
+        policy.activate()
+        self.policy = policy
+        try:
+            engine.start()
+        except Exception:
+            self._end_policy()
+            raise
 
     def scan_done(self, results, detected_cms):
         def _():
+            self._end_policy()
             self.scan_results = results
             self.scanned_cms = detected_cms
             self.scan_running = False

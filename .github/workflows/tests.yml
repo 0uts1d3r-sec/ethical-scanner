@@ -25,4 +25,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pytest
       - name: Run tests
-        run: python -m pytest -q
+        run: |
+          if command -v xvfb-run >/dev/null; then
+            xvfb-run -a python -m pytest -q
+          else
+            python -m pytest -q
+          fi

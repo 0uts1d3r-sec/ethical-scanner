@@ -25,6 +25,7 @@ A desktop web vulnerability scanner with a dark GUI, built with Python and Tkint
 | **XSS detection** | Reflected: reports a finding when the injected payload comes back unmodified in the response |
 | **CMS fingerprinting** | WordPress, Joomla, Drupal, Magento, Laravel, from paths, headers, cookies and HTML patterns, with a confidence score and hardening tips |
 | **Custom wordlists** | Load your own `.txt` payload files for SQLi and XSS, with preview and live counters |
+| **Request limits** | Optional delay between requests, request timeout and a scope file that blocks any request leaving the allowed targets, redirects and form actions included (GUI and CLI) |
 | **Reports** | One-click HTML and PDF export (PDF requires ReportLab) |
 
 ## Installation
@@ -60,7 +61,7 @@ ReportLab is optional: without it the PDF button is simply hidden and everything
 python ethical_scanner.py
 ```
 
-1. Enter the target URL (a missing scheme defaults to `https://`).
+1. Enter the target URL (a missing scheme defaults to `https://`). Optionally set a **delay**, a **timeout** and a **scope file** in the row below it (see [Scope file](#scope-file)).
 2. Click **FULL SCAN** and follow progress in the live log.
 3. Review findings in the **Vulnerabilities** tab and the **CMS Detection** tab.
 4. Export with **HTML** or **PDF** (bottom right). Reports are written to the current directory.
@@ -165,7 +166,7 @@ python ethical_scanner_cli.py https://app.example.com --scope-file scope.txt --d
 - `ScannerApp`: the Tkinter interface.
 - `PDFReportGenerator`: builds the PDF report.
 - `ethical_scanner_cli.py`: the command-line front end, built on the same engine.
-- `RequestPolicy` (CLI): wraps every HTTP request, redirects included, to apply the scope file, `--delay` and `--timeout`.
+- `RequestPolicy`: wraps every HTTP request, redirects included, to apply the scope file, the delay and the timeout (GUI and CLI).
 
 The scan order is: HTTPS, headers, paths, forms, CMS. For each form field, payloads are tried one at a time and testing stops at the first hit per form and per vulnerability type.
 
@@ -179,7 +180,6 @@ This is a lightweight first-pass tool, not a replacement for Burp Suite, ZAP or 
 - Path checks treat any `200` as exposed, so sites with soft-404 pages can produce false positives.
 - Requests are sequential and TLS certificate verification is disabled (`verify=False`), so self-signed targets work but certificate problems are not reported.
 - No authentication or session handling.
-- The request delay and the scope file are available in the command-line version only.
 
 Treat every finding as a lead to verify, not as proof.
 
@@ -187,7 +187,7 @@ Treat every finding as a lead to verify, not as proof.
 
 - Crawl same-origin links and test the forms found
 - Time-based and boolean SQLi detection
-- Request delay and scope limits in the GUI (already available in the CLI), and threads
+- Threads (requests are sequential today)
 - JSON / SARIF export for CI pipelines
 
 ## Development
