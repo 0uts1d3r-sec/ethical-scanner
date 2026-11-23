@@ -6,11 +6,14 @@ For authorized security testing only.
 """
 
 import argparse
+import ipaddress
 import json
+import math
 import os
 import re
 import sys
 import threading
+import time
 from datetime import datetime
 from html import escape
 from urllib.parse import urlparse
@@ -19,7 +22,7 @@ import requests
 
 import ethical_scanner as core
 
-__version__ = "1.1.2"
+__version__ = "1.2.0"
 
 SEVERITY_ORDER = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
 FAIL_LEVELS = {"low": 1, "medium": 2, "high": 3, "critical": 4}
@@ -56,6 +59,125 @@ class Output:
     def line(self, text="", *styles):
         with self.lock:
             print(self.paint(text, *styles), file=self.stream, flush=True)
+
+
+
+class OutOfScope(requests.exceptions.RequestException):
+    """Raised when a request would leave the allowed scope."""
+
+
+class Scope:
+    """Allowed targets read from a text file, one entry per line:
+    a host (example.com), subdomains only (*.example.com), an IP or a CIDR range."""
+
+    def __init__(self, lines, source="scope"):
+        self.source = source
+        self.hosts, self.suffixes, self.networks = set(), [], []
+        for raw in lines:
+            entry = raw.split("#", 1)[0].strip().lower()
+            if not entry:
+                continue
+            if "://" in entry:                       # tolerate a pasted URL
+                entry = urlparse(entry).hostname or ""
+            if entry.startswith("*."):
+                self.suffixes.append(entry[1:])      # ".example.com"
+                continue
+            try:
+                self.networks.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError:
+                if ":" in entry:                     # drop a port: host:8443
+                    entry = entry.rsplit(":", 1)[0]
+                if entry:
+                    self.hosts.add(entry.rstrip("."))
+        if not (self.hosts or self.suffixes or self.networks):
+            raise ValueError("the scope file has no entries")
+
+    @classmethod
+    def from_file(cls, path):
+        with open(path, encoding="utf-8") as f:
+            return cls(f.read().splitlines(), os.path.basename(path))
+
+    def allows(self, host):
+        host = (host or "").lower().rstrip(".")
+        if not host:
+            return False
+        if host in self.hosts or any(host.endswith(s) for s in self.suffixes):
+            return True
+        try:
+            address = ipaddress.ip_address(host)
+        except ValueError:
+            return False
+        return any(address in network for network in self.networks)
+
+
+class RequestPolicy:
+    """While active, every HTTP request (redirect hops included) passes through
+    Session.send: it enforces the scope, waits `delay` seconds between requests and
+    applies a fixed timeout. The scan engine itself needs no change."""
+
+    def __init__(self, scope=None, delay=0.0, timeout=None):
+        self.scope, self.delay, self.timeout = scope, delay, timeout
+        self.sent = 0
+        self.blocked = []
+        self.stopped = False
+        self._last = None
+        self._lock = threading.Lock()
+        self._original = None
+
+    def __enter__(self):
+        policy = self
+        self._original = original = requests.sessions.Session.send
+
+        def send(session, request, **kwargs):
+            policy._before(request.url)
+            if policy.timeout is not None:
+                kwargs["timeout"] = policy.timeout
+            return original(session, request, **kwargs)
+
+        requests.sessions.Session.send = send
+        return self
+
+    def __exit__(self, *exc):
+        requests.sessions.Session.send = self._original
+        return False
+
+    def stop(self):
+        """Refuse every further request (used after Ctrl+C)."""
+        self.stopped = True
+
+    def _before(self, url):
+        host = urlparse(url).hostname
+        with self._lock:
+            if self.stopped:
+                raise requests.exceptions.RequestException("Scan stopped")
+            if self.scope and not self.scope.allows(host):
+                label = host or "(no host)"
+                if label not in self.blocked:
+                    self.blocked.append(label)
+                raise OutOfScope(f"Blocked: {label} is not in the scope file")
+            if self._last is not None:
+                pause = self.delay - (time.monotonic() - self._last)
+                if pause > 0:
+                    time.sleep(pause)
+            self._last = time.monotonic()
+            self.sent += 1
+
+
+def _number(minimum, strict):
+    """argparse type: a finite number above (strict) or from (not strict) `minimum`."""
+
+    def parse(value):
+        try:
+            number = float(value)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"{value!r} is not a number")
+        valid = number > minimum if strict else number >= minimum
+        if not math.isfinite(number) or not valid:
+            raise argparse.ArgumentTypeError(
+                f"must be {'greater than' if strict else 'at least'} {minimum:g}")
+        return number
+
+    return parse
 
 
 # ------------------------------------------------------------------ helpers
@@ -111,6 +233,9 @@ def check_reachable(url, out):
         requests.get(url, timeout=10, verify=False,
                      headers={"User-Agent": "EthicalScanner"})
         return True
+    except OutOfScope as e:
+        out.line(str(e), "red")
+        return False
     except requests.exceptions.RequestException as e:
         out.line(f"Target unreachable: {core.short_error(e)}", "red")
         out.line(f"Nothing answered at {url}. Check the address, the port and "
@@ -119,8 +244,8 @@ def check_reachable(url, out):
 
 
 # ------------------------------------------------------------------ reports
-def build_json(url, results, cms, sql_src, xss_src):
-    return json.dumps({
+def build_json(url, results, cms, sql_src, xss_src, extra=None):
+    data = {
         "tool": "EthicalScanner CLI",
         "version": __version__,
         "target": url,
@@ -130,7 +255,9 @@ def build_json(url, results, cms, sql_src, xss_src):
         "findings": sorted(results, key=sort_key),
         "cms": [{k: c[k] for k in ("name", "confidence", "evidence", "known_vulns")}
                 for c in cms],
-    }, indent=2, ensure_ascii=False)
+    }
+    data.update(extra or {})
+    return json.dumps(data, indent=2, ensure_ascii=False)
 
 
 def build_text(url, results, cms, sql_src, xss_src, verbose=True):
@@ -192,7 +319,7 @@ SQLi: {escape(sql_src)} | XSS: {escape(xss_src)}</div>
 """
 
 
-def write_report(path, url, results, cms, manager, out):
+def write_report(path, url, results, cms, manager, out, extra=None):
     ext = os.path.splitext(path)[1].lower()
     sql_src, xss_src = describe_wordlist(manager, "sql"), describe_wordlist(manager, "xss")
     if ext == ".pdf":
@@ -206,8 +333,12 @@ def write_report(path, url, results, cms, manager, out):
         if ext not in builders:
             raise RuntimeError(f"Unsupported report extension {ext!r} "
                                "(use .json, .html, .pdf or .txt)")
+        builder = builders[ext]
+        text = (builder(url, results, cms, sql_src, xss_src, extra=extra)
+                if builder is build_json
+                else builder(url, results, cms, sql_src, xss_src))
         with open(path, "w", encoding="utf-8") as f:
-            f.write(builders[ext](url, results, cms, sql_src, xss_src))
+            f.write(text)
     out.line(f"Report saved: {path}", "green")
 
 
@@ -224,6 +355,15 @@ def build_parser():
     p.add_argument("--allow-destructive", action="store_true",
                    help="allow SQLi payloads that modify or delete data "
                         "(lab databases only)")
+    p.add_argument("--delay", type=_number(0, strict=False), default=0.0,
+                   metavar="SECONDS",
+                   help="minimum pause between two requests (rate limit)")
+    p.add_argument("--timeout", type=_number(0, strict=True), metavar="SECONDS",
+                   help="timeout applied to every request (default: the engine's own)")
+    p.add_argument("--scope-file", metavar="FILE",
+                   help="allowed targets, one per line (example.com, *.example.com, "
+                        "10.0.0.0/24); any request outside the list is blocked, "
+                        "redirects and form actions included")
     p.add_argument("-o", "--output", metavar="FILE",
                    help="save a report; format from extension (.json .html .pdf .txt)")
     p.add_argument("--json", action="store_true",
@@ -275,61 +415,96 @@ def main(argv=None):
     manager = load_wordlists(args, out)
     if manager is None:
         return 2
+
+    scope = None
+    if args.scope_file:
+        try:
+            scope = Scope.from_file(args.scope_file)
+        except (OSError, ValueError) as e:
+            out.line(f"Scope file error: {e}", "red")
+            return 2
+        host = urlparse(url).hostname
+        if not scope.allows(host):
+            out.line(f"Target {host} is not in the scope file ({scope.source}). "
+                     "Aborting.", "red")
+            return 2
+        out.line(f"Scope: {host} is allowed by {scope.source}", "dim")
+
     if not confirm_authorization(urlparse(url).netloc, args.yes, out):
         out.line("Aborted: authorization not confirmed.", "red")
         return 2
-    if not check_reachable(url, out):
-        return 2
 
-    def on_log(msg, kind="info"):
-        if not args.quiet:
-            out.line(msg, LOG_STYLE.get(kind))
-
-    finished = threading.Event()
-    engine = core.ScanEngine(
-        url, manager.sql_payloads, manager.xss_payloads,
-        log_callback=on_log, vuln_callback=lambda v: None,
-        cms_callback=lambda c: None,
-        done_callback=lambda results, cms: finished.set())
-
-    out.line(f"=== SCAN: {engine.url} ===", "bold")
-    engine.start()
-    interrupted = False
-    try:
-        while not finished.wait(0.2):
-            pass
-    except KeyboardInterrupt:
-        interrupted = True
-        out.line("\nInterrupted: showing partial results.", "yellow")
-
-    results, cms = list(engine.results), list(engine.detected_cms)
-    sql_src, xss_src = describe_wordlist(manager, "sql"), describe_wordlist(manager, "xss")
-
-    if args.json:
-        print(build_json(engine.url, results, cms, sql_src, xss_src))
-    else:
-        out.line()
-        for v in sorted(results, key=sort_key):
-            tag = f"[{v['severity'].upper():<8}]"
-            out.line(f"{tag} {v['type']}: {v['description']}", SEV_STYLE.get(v["severity"]))
-        counts = count_by_severity(results)
-        summary = ", ".join(f"{n} {s}" for s, n in counts.items() if n) or "clean"
-        out.line(f"=== DONE: {len(results)} finding(s) | {len(cms)} CMS | {summary} ===", "bold")
-
-    if args.output:
-        try:
-            write_report(args.output, engine.url, results, cms, manager, out)
-        except (RuntimeError, OSError) as e:
-            out.line(f"Report error: {e}", "red")
+    policy = RequestPolicy(scope, args.delay, args.timeout)
+    # The policy stays installed until main() returns, so that a scan thread still
+    # running after Ctrl+C can never bypass the scope.
+    with policy:
+        if not check_reachable(url, out):
             return 2
 
-    if interrupted:
-        return 130
-    if args.fail_on:
-        threshold = FAIL_LEVELS[args.fail_on]
-        if any(SEVERITY_ORDER.get(v["severity"], 0) >= threshold for v in results):
-            return 1
-    return 0
+        def on_log(msg, kind="info"):
+            if not args.quiet:
+                out.line(msg, LOG_STYLE.get(kind))
+
+        finished = threading.Event()
+        engine = core.ScanEngine(
+            url, manager.sql_payloads, manager.xss_payloads,
+            log_callback=on_log, vuln_callback=lambda v: None,
+            cms_callback=lambda c: None,
+            done_callback=lambda results, cms: finished.set())
+
+        out.line(f"=== SCAN: {engine.url} ===", "bold")
+        engine.start()
+        interrupted = False
+        try:
+            while not finished.wait(0.2):
+                pass
+        except KeyboardInterrupt:
+            interrupted = True
+            policy.stop()
+            out.line("\nInterrupted: showing partial results.", "yellow")
+
+        results, cms = list(engine.results), list(engine.detected_cms)
+        sql_src = describe_wordlist(manager, "sql")
+        xss_src = describe_wordlist(manager, "xss")
+        extra = {
+            "settings": {"delay": args.delay, "timeout": args.timeout,
+                         "scope_file": scope.source if scope else None},
+            "requests_sent": policy.sent,
+            "blocked_hosts": list(policy.blocked),
+        }
+
+        if args.json:
+            print(build_json(engine.url, results, cms, sql_src, xss_src, extra=extra))
+        else:
+            out.line()
+            for v in sorted(results, key=sort_key):
+                tag = f"[{v['severity'].upper():<8}]"
+                out.line(f"{tag} {v['type']}: {v['description']}",
+                         SEV_STYLE.get(v["severity"]))
+            counts = count_by_severity(results)
+            summary = ", ".join(f"{n} {s}" for s, n in counts.items() if n) or "clean"
+            out.line(f"=== DONE: {len(results)} finding(s) | {len(cms)} CMS | "
+                     f"{summary} ===", "bold")
+            out.line(f"Requests sent: {policy.sent}", "dim")
+            if policy.blocked:
+                out.line("Blocked out-of-scope host(s): " + ", ".join(policy.blocked),
+                         "yellow")
+
+        if args.output:
+            try:
+                write_report(args.output, engine.url, results, cms, manager, out,
+                             extra=extra)
+            except (RuntimeError, OSError) as e:
+                out.line(f"Report error: {e}", "red")
+                return 2
+
+        if interrupted:
+            return 130
+        if args.fail_on:
+            threshold = FAIL_LEVELS[args.fail_on]
+            if any(SEVERITY_ORDER.get(v["severity"], 0) >= threshold for v in results):
+                return 1
+        return 0
 
 
 if __name__ == "__main__":

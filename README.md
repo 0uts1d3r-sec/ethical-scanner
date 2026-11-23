@@ -135,6 +135,23 @@ python ethical_scanner_cli.py http://localhost:3000 \
 | `-q`, `--no-color` | Hide the live log / disable colors |
 | `-y`, `--yes` | Confirm that you are authorized to test the target (otherwise you are asked) |
 | `--allow-destructive` | Required to use SQLi payloads that modify or delete data (lab databases only) |
+| `--delay SECONDS` | Minimum pause between two requests (rate limit), e.g. `--delay 1` |
+| `--timeout SECONDS` | Timeout applied to every request |
+| `--scope-file FILE` | Allowed targets: the scan is refused for any other host, and every request that leaves the scope (redirects and form actions included) is blocked |
+
+### Scope file
+
+One entry per line, comments start with `#` (see `scope.example.txt`):
+
+`````text
+example.com        # this host only
+*.example.com      # subdomains only: list the apex separately
+10.0.0.0/24        # IP range
+`````
+
+`````bash
+python ethical_scanner_cli.py https://app.example.com --scope-file scope.txt --delay 1 --timeout 10
+````
 
 ## How it works
 
