@@ -133,6 +133,8 @@ python ethical_scanner_cli.py http://localhost:3000 \
   -o report.html
 ```
 
+![Command-line scan](docs/screenshot-5.jpg)
+
 | Option | What it does |
 |---|---|
 | `-o FILE` | Save a report; the format comes from the extension (`.json`, `.html`, `.pdf`, `.txt`) |
