@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | ![Main scan view](docs/screenshot-1.png) | ![Scan results](docs/screenshot-2.png) |
-| ![Vulnerabilities tab](docs/screenshot-3.png) | ![Report export](docs/screenshot-4.png) |
+| ![Wordlists tab](docs/screenshot-3.png) | ![CMS detection tab](docs/screenshot-4.png) |
 
 A desktop web vulnerability scanner with a dark GUI, built with Python and Tkinter. It runs a set of quick, first-pass checks against a target you are authorized to test, lets you plug in your own SQLi / XSS payload wordlists, and exports the findings as an HTML or PDF report.
 
