@@ -62,7 +62,7 @@ python ethical_scanner.py
 ```
 
 1. Enter the target URL (a missing scheme defaults to `https://`). Optionally set a **delay**, a **timeout** and a **scope file** in the row below it (see [Scope file](#scope-file)).
-2. Click **FULL SCAN** and follow progress in the live log.
+2. Click **FULL SCAN** and follow progress in the live log. The target is checked first, so a dead address stops right away instead of producing fake findings. **STOP** interrupts a running scan and keeps the partial results.
 3. Review findings in the **Vulnerabilities** tab and the **CMS Detection** tab.
 4. Export with **HTML** or **PDF** (bottom right). Reports are written to the current directory.
 
@@ -170,7 +170,7 @@ python ethical_scanner_cli.py https://app.example.com --scope-file scope.txt --d
 - `ethical_scanner_cli.py`: the command-line front end, built on the same engine.
 - `RequestPolicy`: wraps every HTTP request, redirects included, to apply the scope file, the delay and the timeout (GUI and CLI).
 
-The scan order is: HTTPS, headers, paths, forms, CMS. For each form field, payloads are tried one at a time and testing stops at the first hit per form and per vulnerability type.
+The scan order is: target check, HTTPS, headers, paths, forms, CMS. For each form field, payloads are tried one at a time and testing stops at the first hit per form and per vulnerability type.
 
 ## Limitations
 

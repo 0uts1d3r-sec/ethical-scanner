@@ -20,7 +20,7 @@ import requests
 
 import ethical_scanner as core
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 SEVERITY_ORDER = {"Low": 1, "Medium": 2, "High": 3, "Critical": 4}
 FAIL_LEVELS = {"low": 1, "medium": 2, "high": 3, "critical": 4}
@@ -133,18 +133,13 @@ def confirm_authorization(host, assume_yes, out):
 
 def check_reachable(url, out):
     """Stop early on a dead target instead of reporting misleading findings."""
-    try:
-        requests.get(url, timeout=10, verify=False,
-                     headers={"User-Agent": "EthicalScanner"})
-        return True
-    except OutOfScope as e:
-        out.line(str(e), "red")
-        return False
-    except requests.exceptions.RequestException as e:
-        out.line(f"Target unreachable: {core.short_error(e)}", "red")
-        out.line(f"Nothing answered at {url}. Check the address, the port and "
-                 "that the service is running.", "red")
-        return False
+    ok, message = core.check_reachable(url)
+    if not ok:
+        out.line(message, "red")
+        if message.startswith("Target unreachable"):
+            out.line(f"Nothing answered at {url}. Check the address, the port and "
+                     "that the service is running.", "red")
+    return ok
 
 
 # ------------------------------------------------------------------ reports

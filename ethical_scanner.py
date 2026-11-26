@@ -462,6 +462,21 @@ def build_request_policy(url, scope_path=None, delay_text="", timeout_text=""):
     return RequestPolicy(scope, delay or 0.0, timeout), None
 
 
+def check_reachable(url, timeout=10):
+    """Ask the target once before scanning.
+    Returns (True, None) if it answers, or (False, message).
+    It goes through the active RequestPolicy, so the scope and the timeout still apply."""
+    try:
+        requests.get(
+            url, timeout=timeout, verify=False, headers={"User-Agent": "EthicalScanner"}
+        )
+        return True, None
+    except OutOfScope as e:
+        return False, str(e)
+    except requests.exceptions.RequestException as e:
+        return False, f"Target unreachable: {short_error(e)}"
+
+
 def short_error(e):
     """Turn a long requests/urllib3 exception into a one-line message."""
     msg = str(e)
@@ -935,6 +950,7 @@ class ScannerApp(tk.Tk if GUI_AVAILABLE else object):
         self.wordlist = WordlistManager()  # Wordlist manager
         self.scope_path = None
         self.policy = None
+        self.stop_requested = False
         self._build_ui()
 
     #  UI CONSTRUCTION
@@ -1005,6 +1021,8 @@ class ScannerApp(tk.Tk if GUI_AVAILABLE else object):
         ).pack(side="left", padx=5)
 
         self._build_limits_bar()
+
+        self._add_stop_button()
 
 
         # -- Body --
@@ -1241,6 +1259,77 @@ class ScannerApp(tk.Tk if GUI_AVAILABLE else object):
         tk.Button(bar, text=" Clear ", command=self._clear_scope, **button_style).pack(
             side="left"
         )
+
+    def _add_stop_button(self):
+        """STOP button at the right end of the limits bar (enabled during a scan)."""
+        bar = self.scope_label.master
+        self.stop_btn = tk.Button(
+            bar,
+            text=" STOP ",
+            command=self.stop_scan,
+            font=("Courier New", 10, "bold"),
+            bg=PRIMARY,
+            fg=TEXT,
+            activebackground=BORDER,
+            activeforeground=TEXT,
+            disabledforeground=MUTED,
+            relief="flat",
+            cursor="hand2",
+            state="disabled",
+        )
+        self.stop_btn.pack(side="right")
+
+    def _engine_log(self, msg, kind="info"):
+        """Engine messages go to the log, except after STOP (they would only be noise)."""
+        if not self.stop_requested:
+            self.log_msg(msg, kind)
+
+    def _preflight_then_run(self, engine, url):
+        """Worker thread: check that the target answers, then start the scan.
+        Doing it off the main thread keeps the window responsive."""
+        ok, message = check_reachable(url)
+        if self.stop_requested:
+            self.after(0, self._scan_stopped)
+        elif not ok:
+            self.after(0, lambda: self._scan_unreachable(message))
+        else:
+            engine.start()
+
+    def stop_scan(self):
+        if not self.scan_running or self.stop_requested:
+            return
+        self.stop_requested = True
+        self.stop_btn.config(state="disabled")
+        if self.policy is not None:
+            self.policy.stop()
+        self.log_msg("  Stopping: waiting for the request in progress...", "warn")
+
+    def _reset_after_scan(self, quiet=False):
+        """Common end of a scan that never reached the engine's own completion."""
+        if quiet:
+            policy, self.policy = self.policy, None
+            if policy is not None:
+                policy.deactivate()
+        else:
+            self._end_policy()
+        self.scan_running = False
+        self.progress.stop()
+        self.stop_btn.config(state="disabled")
+        self.scan_btn.config(state="normal", bg=ACCENT, fg=INK)
+
+    def _scan_unreachable(self, message):
+        self.log_msg(f"  {message}", "warn")
+        self.log_msg(
+            "  Nothing was scanned. Check the address, the port and that the service is running.",
+            "info",
+        )
+        self._reset_after_scan(quiet=True)
+        self.status_label.config(text="Target unreachable", fg=TEXT)
+
+    def _scan_stopped(self):
+        self._reset_after_scan()
+        self.status_label.config(text="Scan stopped", fg=TEXT)
+        self.log_msg("\n=== STOPPED ===", "title")
 
     def _pick_scope(self):
         path = filedialog.askopenfilename(
@@ -1793,6 +1882,8 @@ FOR AUTHORIZED, ETHICAL USE ONLY
         self.scanned_url = url
         self.scan_running = True
         self.scan_btn.config(state="disabled", bg=SURFACE_HI, fg=MUTED)
+        self.stop_requested = False
+        self.stop_btn.config(state="normal")
         self.progress.start(10)
         self.status_label.config(text="Scan in progress...", fg=ACCENT)
 
@@ -1821,7 +1912,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             url=url,
             sql_payloads=list(self.wordlist.sql_payloads),
             xss_payloads=list(self.wordlist.xss_payloads),
-            log_callback=self.log_msg,
+            log_callback=self._engine_log,
             vuln_callback=self.add_vuln,
             cms_callback=self.update_cms_ui,
             done_callback=self.scan_done,
@@ -1830,9 +1921,11 @@ FOR AUTHORIZED, ETHICAL USE ONLY
         policy.activate()
         self.policy = policy
         try:
-            engine.start()
+            threading.Thread(
+                target=self._preflight_then_run, args=(engine, url), daemon=True
+            ).start()
         except Exception:
-            self._end_policy()
+            self._reset_after_scan(quiet=True)
             raise
 
     def scan_done(self, results, detected_cms):
@@ -1842,9 +1935,10 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             self.scanned_cms = detected_cms
             self.scan_running = False
             self.progress.stop()
+            self.stop_btn.config(state="disabled")
             nb = len(results)
             self.status_label.config(
-                text=f"Done - {nb} vuln | {len(detected_cms)} CMS",
+                text=f"{'Stopped' if self.stop_requested else 'Done'} - {nb} vuln | {len(detected_cms)} CMS",
                 fg=ACCENT if nb > 0 else TEXT,
             )
             self.scan_btn.config(state="normal", bg=ACCENT, fg=INK)
@@ -1852,7 +1946,7 @@ FOR AUTHORIZED, ETHICAL USE ONLY
             if self.pdf_btn:
                 self.pdf_btn.config(state="normal")
             self.log_msg(
-                f"\n=== DONE: {nb} vulnerabilit{'y' if nb == 1 else 'ies'} | {len(detected_cms)} CMS ===",
+                f"\n=== {'STOPPED' if self.stop_requested else 'DONE'}: {nb} vulnerabilit{'y' if nb == 1 else 'ies'} | {len(detected_cms)} CMS ===",
                 "title",
             )
 

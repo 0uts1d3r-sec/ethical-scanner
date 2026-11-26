@@ -1,6 +1,7 @@
 """The real Tk interface, run under a virtual display (xvfb-run in CI).
 These tests are skipped when Tk or a display is not available."""
 import gc
+import re
 import time
 
 import pytest
@@ -36,12 +37,14 @@ def fill(entry, text):
     entry.insert(0, text)
 
 
-def run_scan(app, url, scope=None, delay="0", timeout=""):
+def run_scan(app, url, scope=None, delay="0", timeout="", stop_after=None):
     fill(app.url_field, url)
     fill(app.delay_entry, delay)
     fill(app.timeout_entry, timeout)
     app.scope_path = scope
     app.start_scan()
+    if stop_after is not None:
+        app.after(int(stop_after * 1000), app.stop_scan)
     # Like the real application, run a main loop: the engine thread talks to Tk
     # through after(), which requires the main thread to be inside mainloop().
     deadline = time.time() + 60
@@ -125,3 +128,81 @@ def test_clear_scope_resets_the_label(app, tmp_path):
     app._clear_scope()
     assert app.scope_path is None
     assert app.scope_label.cget("text") == "none (any target)"
+
+
+DEAD = "http://127.0.0.1:9"  # nothing listens here
+
+
+def requests_sent(app):
+    return int(re.search(r"Requests sent: (\d+)", log_text(app)).group(1))
+
+
+def test_stop_button_is_disabled_until_a_scan_runs(app):
+    assert str(app.stop_btn.cget("state")) == "disabled"
+    app.stop_scan()  # nothing is running: must be a harmless no-op
+    assert not app.stop_requested
+
+
+def test_dead_target_scans_nothing_and_reports_it(app):
+    original = requests.sessions.Session.send
+    run_scan(app, DEAD)
+    text = log_text(app)
+    assert "Target unreachable: Could not connect to the target" in text
+    assert "Nothing was scanned" in text
+    assert "Missing HTTPS" not in text
+    assert app.table.get_children() == ()
+    assert app.status_label.cget("text") == "Target unreachable"
+    assert str(app.scan_btn.cget("state")) == "normal"
+    assert str(app.stop_btn.cget("state")) == "disabled"
+    assert requests.sessions.Session.send is original
+    assert app.policy is None
+
+
+def test_unreachable_target_can_be_followed_by_a_normal_scan(app, serve):
+    run_scan(app, DEAD)
+    run_scan(app, serve({"/": (200, "<html></html>", {}), "/admin": (200, "ok", {})}))
+    assert "=== DONE" in log_text(app)
+    assert any(v["type"] == "Exposed path" for v in app.scan_results)
+
+
+def test_slow_target_is_reported_as_unreachable(app, serve):
+    slow = serve({"/": (200, lambda qs: time.sleep(1) or "<html></html>", {})})
+    run_scan(app, slow, timeout="0.2")
+    assert "timed out" in log_text(app).lower()
+    assert app.scan_results == []
+
+
+def test_stop_interrupts_a_scan_and_keeps_the_partial_results(app, serve):
+    original = requests.sessions.Session.send
+    url = serve({"/": (200, "<html></html>", {}), "/admin": (200, "ok", {})})
+    run_scan(app, url, delay="0.2", stop_after=0.8)
+    text = log_text(app)
+    assert "=== STOPPED" in text and "=== DONE" not in text
+    assert "Stopping" in text
+    assert "Error: Scan stopped" not in text  # nothing noisy after STOP
+    assert requests_sent(app) < 20  # a full scan sends about 40
+    assert app.status_label.cget("text").startswith("Stopped")
+    assert str(app.scan_btn.cget("state")) == "normal"
+    assert str(app.stop_btn.cget("state")) == "disabled"
+    assert str(app.html_btn.cget("state")) == "normal"  # partial results can be exported
+    assert requests.sessions.Session.send is original
+
+
+def test_a_new_scan_works_after_a_stop(app, serve):
+    url = serve({"/": (200, "<html></html>", {}), "/admin": (200, "ok", {})})
+    run_scan(app, url, delay="0.2", stop_after=0.5)
+    assert app.stop_requested
+    run_scan(app, url)
+    text = log_text(app)
+    assert "=== DONE" in text and "STOPPED" not in text
+    assert not app.stop_requested
+    assert any(v["type"] == "Exposed path" for v in app.scan_results)
+
+
+def test_stop_during_the_target_check_starts_no_scan(app, serve):
+    slow = serve({"/": (200, lambda qs: time.sleep(1) or "<html></html>", {})})
+    run_scan(app, slow, stop_after=0.3)
+    text = log_text(app)
+    assert "=== STOPPED ===" in text
+    assert app.scan_results == []
+    assert str(app.scan_btn.cget("state")) == "normal"
